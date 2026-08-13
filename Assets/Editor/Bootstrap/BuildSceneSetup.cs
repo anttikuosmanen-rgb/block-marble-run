@@ -29,6 +29,10 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             Material partMaterial = EnsureMaterial("Part", "Universal Render Pipeline/Lit", opaque: true);
             Material ghostMaterial = EnsureMaterial("Ghost", "Universal Render Pipeline/Lit", opaque: false);
             Material groundMaterial = EnsureMaterial("Ground", "Block Marble Run/Infinite Stud Grid", opaque: true);
+            Material highlightMaterial = EnsureMaterial("Highlight", "Universal Render Pipeline/Lit", opaque: true);
+            highlightMaterial.SetColor("_BaseColor", new Color(0.35f, 0.85f, 1f));
+            highlightMaterial.SetColor("_EmissionColor", new Color(0.10f, 0.35f, 0.5f));
+            highlightMaterial.EnableKeyword("_EMISSION");
 
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
@@ -62,6 +66,7 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             controller.orbitCamera = orbit;
             controller.ghost = ghost;
             controller.partRoot = partRoot;
+            controller.highlightMaterial = highlightMaterial;
 
             var stress = systems.AddComponent<StressTest>();
             stress.controller = controller;
@@ -79,6 +84,7 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             Verify(controller.factory, "BuildController.factory");
             Verify(raycaster.buildCamera, "BuildRaycaster.buildCamera");
             Verify(ghost.ghostMaterial, "GhostPreview.ghostMaterial");
+            Verify(controller.highlightMaterial, "BuildController.highlightMaterial");
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);

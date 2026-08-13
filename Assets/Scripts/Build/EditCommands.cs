@@ -72,6 +72,50 @@ namespace BlockMarbleRun.Build
         }
     }
 
+    /// <summary>
+    /// Removes many parts as one history entry, so a box delete undoes in a single step rather than
+    /// making the player press undo once per brick.
+    /// </summary>
+    public sealed class RemoveManyCommand : IEditCommand
+    {
+        readonly GridMap _map;
+        readonly List<PlacedPart> _parts;
+        readonly System.Func<PlacedPart, GameObject> _spawn;
+
+        public RemoveManyCommand(GridMap map, IEnumerable<PlacedPart> parts, System.Func<PlacedPart, GameObject> spawn)
+        {
+            _map = map;
+            _parts = new List<PlacedPart>(parts);
+            _spawn = spawn;
+        }
+
+        public bool Do()
+        {
+            bool removedAny = false;
+
+            foreach (PlacedPart part in _parts)
+            {
+                if (!_map.Remove(part))
+                    continue;
+
+                if (part.Instance != null)
+                    Object.Destroy(part.Instance);
+
+                part.Instance = null;
+                removedAny = true;
+            }
+
+            return removedAny;
+        }
+
+        public void Undo()
+        {
+            foreach (PlacedPart part in _parts)
+                if (_map.Add(part))
+                    part.Instance = _spawn(part);
+        }
+    }
+
     /// <summary>Adds a part to the grid and builds its scene object.</summary>
     public sealed class PlacePartCommand : IEditCommand
     {

@@ -1,0 +1,13 @@
+<!--
+  IL2CPP managed stripping is set to High, which removes types it cannot see referenced. JsonUtility
+  reaches the save model by reflection, so without this the fields survive in the editor and vanish
+  from the WebGL and macOS players - saves would write "{}" and load as empty creations, with no
+  error anywhere. DESIGN.md §11 lists this as a known risk of the stripping level.
+-->
+<linker>
+  <assembly fullname="BlockMarbleRun.Runtime">
+    <type fullname="BlockMarbleRun.Persistence.SaveModel" preserve="all" />
+    <type fullname="BlockMarbleRun.Persistence.SavedPart" preserve="all" />
+    <type fullname="BlockMarbleRun.Persistence.SaveSlot" preserve="all" />
+  </assembly>
+</linker>

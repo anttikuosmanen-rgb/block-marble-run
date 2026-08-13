@@ -29,6 +29,35 @@ namespace BlockMarbleRun.Grid
         public PlacedPart At(GridCoord cell) => _cells.GetValueOrDefault(cell);
         public bool IsOccupied(GridCoord cell) => _cells.ContainsKey(cell);
 
+        /// <summary>
+        /// O(1) membership test. Going through the IReadOnlyCollection would fall back to a linear
+        /// scan, which turns pruning a large selection into quadratic work.
+        /// </summary>
+        public bool Contains(PlacedPart part) => part != null && _parts.Contains(part);
+
+        /// <summary>Highest layer any part has ever reached; an upper bound for downward scans.</summary>
+        int _maxLayer;
+
+        /// <summary>
+        /// The layer at which something dropped into this column would come to rest: the top of the
+        /// highest part there, or ground level.
+        ///
+        /// Scans downward from the tallest thing built rather than tracking a height map, because a
+        /// height map has to be repaired on every removal and builds are only ever a few dozen layers
+        /// tall. The bound is never lowered on removal - it stays a safe over-estimate.
+        /// </summary>
+        public int ColumnRestLayer(int x, int y)
+        {
+            for (int layer = _maxLayer; layer >= 0; layer--)
+            {
+                PlacedPart part = _cells.GetValueOrDefault(new GridCoord(x, y, layer));
+                if (part != null)
+                    return part.TopLayer;
+            }
+
+            return 0;
+        }
+
         public PlacementResult CanPlace(PlacedPart part)
         {
             foreach (GridCoord cell in part.OccupiedCells())
@@ -79,6 +108,7 @@ namespace BlockMarbleRun.Grid
                 _cells[cell] = part;
 
             _parts.Add(part);
+            _maxLayer = Mathf.Max(_maxLayer, part.TopLayer);
             _boundsValid = false;
             return true;
         }
@@ -100,6 +130,7 @@ namespace BlockMarbleRun.Grid
         {
             _cells.Clear();
             _parts.Clear();
+            _maxLayer = 0;
             _boundsValid = false;
         }
 

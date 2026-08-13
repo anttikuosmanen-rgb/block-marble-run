@@ -68,15 +68,49 @@ namespace BlockMarbleRun.Build
 
             // Catalog count stays visible: a null catalog leaves the game running but inert, with
             // camera control still working, which reads as "nothing is wrong" until you try to build.
-            GUILayout.Label($"Catalog: {controller.CatalogPartCount}", _style);
+            GUILayout.Label(
+                $"Catalog: {controller.CatalogPartCount}   Selected: {controller.Selection?.Count ?? 0}   " +
+                $"Slot: {controller.SlotName}", _style);
+
+            if (!string.IsNullOrEmpty(controller.Status))
+                GUILayout.Label(controller.Status, _style);
 
             GUILayout.Space(6);
             GUILayout.Label("Q / E part    R rotate    C colour", _style);
-            GUILayout.Label("Left click place    Alt + click delete", _style);
+            GUILayout.Label("Left click place    Alt + click delete    Shift + drag select    Del delete selection", _style);
+            GUILayout.Label("S save    L load", _style);
             GUILayout.Label("Right drag orbit    Middle drag pan    Scroll zoom", _style);
             GUILayout.Label("F frame build    Home origin    Cmd+Z undo    Shift+Cmd+Z redo", _style);
             GUILayout.Label("Stress: T palette-mat   Y property-block(old)   U palette+sparse   G clear   B reset worst", _style);
             GUILayout.EndArea();
+
+            DrawSelectionBox();
+        }
+
+        /// <summary>
+        /// Draws the drag rectangle. GUI space has its origin at the top left while the mouse reports
+        /// from the bottom left, so the rectangle has to be flipped or it appears mirrored vertically.
+        /// </summary>
+        void DrawSelectionBox()
+        {
+            Rect rect = controller.BoxSelectRect;
+            if (rect.width <= 0f && rect.height <= 0f)
+                return;
+
+            var flipped = new Rect(rect.x, Screen.height - rect.yMax, rect.width, rect.height);
+
+            Color previous = GUI.color;
+            GUI.color = new Color(0.35f, 0.75f, 1f, 0.18f);
+            GUI.DrawTexture(flipped, Texture2D.whiteTexture);
+            GUI.color = new Color(0.45f, 0.85f, 1f, 0.9f);
+
+            const float edge = 1f;
+            GUI.DrawTexture(new Rect(flipped.x, flipped.y, flipped.width, edge), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(flipped.x, flipped.yMax - edge, flipped.width, edge), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(flipped.x, flipped.y, edge, flipped.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(flipped.xMax - edge, flipped.y, edge, flipped.height), Texture2D.whiteTexture);
+
+            GUI.color = previous;
         }
     }
 }

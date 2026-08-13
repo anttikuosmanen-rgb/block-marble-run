@@ -178,30 +178,38 @@ namespace BlockMarbleRun.EditorTools.Import
         // --- Chirality (DESIGN.md §3.4) -------------------------------------------------------
 
         /// <summary>Above this, the mirror is a rotation the game already offers, so generating one duplicates a part.</summary>
-        const float RedundantThreshold = 0.95f;
+        const float RedundantThreshold = 0.90f;
 
         /// <summary>Below this, the part is genuinely handed and needs a generated mirror.</summary>
-        const float ChiralThreshold = 0.80f;
+        const float ChiralThreshold = 0.75f;
+
+        const int SampleCount = 250_000;
+        const float VoxelMm = 2.0f;
 
         /// <summary>
         /// The useful question is not "is this part asymmetric" but "is its mirror reproducible by one
         /// of the four yaw rotations the game already supports". A quarter-turn curve is asymmetric,
         /// yet its mirror is just a rotation - generating one would put the same piece in the palette
         /// twice.
+        ///
+        /// Comparison is by occupied volume, sampled over the surface, rather than by vertex
+        /// positions. An earlier version compared vertex sets and was wrong on four parts: mirroring
+        /// a triangulated mesh does not reproduce the original vertex positions even when the shape
+        /// is identical, so that test was really measuring tessellation. Area-weighted sampling
+        /// answers the question actually being asked - does the same solid come back.
         /// </summary>
         void DeriveChirality(List<StlFacet> facets)
         {
-            const float quantise = 0.2f; // mm; coarse enough to absorb tessellation differences
+            List<Vector3> points = SampleSurface(facets, SampleCount);
 
-            HashSet<Vector3Int> baseSet = PointSet(facets, quantise, mirror: false, rotations: 0);
+            HashSet<Vector3Int> baseSet = Voxelise(points, mirror: false, rotations: 0);
 
             MirrorScore = 0f;
             MirrorBestRotation = 0;
 
             for (int rot = 0; rot < 4; rot++)
             {
-                HashSet<Vector3Int> candidate = PointSet(facets, quantise, mirror: true, rotations: rot);
-                float score = Jaccard(baseSet, candidate);
+                float score = Jaccard(baseSet, Voxelise(points, mirror: true, rotations: rot));
                 if (score > MirrorScore)
                 {
                     MirrorScore = score;
@@ -214,37 +222,90 @@ namespace BlockMarbleRun.EditorTools.Import
                 : MirrorVerdict.Ambiguous;
         }
 
-        HashSet<Vector3Int> PointSet(List<StlFacet> facets, float quantise, bool mirror, int rotations)
+        /// <summary>
+        /// Scatters points across the surface, giving each triangle a share proportional to its area
+        /// so dense tessellation does not weight one region more than another.
+        ///
+        /// The generator is a fixed-seed xorshift rather than System.Random: a verdict that changed
+        /// between runs, or between Unity versions, would be worse than a wrong one.
+        /// </summary>
+        static List<Vector3> SampleSurface(List<StlFacet> facets, int target)
+        {
+            double totalArea = 0.0;
+            var areas = new double[facets.Count];
+
+            for (int i = 0; i < facets.Count; i++)
+            {
+                areas[i] = Vector3.Cross(facets[i].B - facets[i].A, facets[i].C - facets[i].A).magnitude * 0.5;
+                totalArea += areas[i];
+            }
+
+            var points = new List<Vector3>(target + facets.Count);
+            if (totalArea <= 0.0)
+                return points;
+
+            uint state = 0x9E3779B9;
+
+            for (int i = 0; i < facets.Count; i++)
+            {
+                int count = Mathf.Max(1, (int)(target * (areas[i] / totalArea)));
+                StlFacet f = facets[i];
+                Vector3 ab = f.B - f.A;
+                Vector3 ac = f.C - f.A;
+
+                for (int s = 0; s < count; s++)
+                {
+                    float u = NextFloat(ref state);
+                    float v = NextFloat(ref state);
+
+                    // Fold the far half of the unit square back into the triangle.
+                    if (u + v > 1f)
+                    {
+                        u = 1f - u;
+                        v = 1f - v;
+                    }
+
+                    points.Add(f.A + ab * u + ac * v);
+                }
+            }
+
+            return points;
+        }
+
+        static float NextFloat(ref uint state)
+        {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return (state & 0xFFFFFF) / (float)0x1000000;
+        }
+
+        HashSet<Vector3Int> Voxelise(List<Vector3> points, bool mirror, int rotations)
         {
             // Centre on the bounding box so mirroring and rotation are about the part's own axis.
             float cx = MinMm.x + SizeMm.x * 0.5f;
             float cy = MinMm.y + SizeMm.y * 0.5f;
 
-            var set = new HashSet<Vector3Int>();
-            foreach (StlFacet f in facets)
+            var set = new HashSet<Vector3Int>(points.Count / 4);
+
+            foreach (Vector3 p in points)
             {
-                Accumulate(set, f.A, cx, cy, quantise, mirror, rotations);
-                Accumulate(set, f.B, cx, cy, quantise, mirror, rotations);
-                Accumulate(set, f.C, cx, cy, quantise, mirror, rotations);
+                float x = p.x - cx;
+                float y = p.y - cy;
+
+                if (mirror)
+                    x = -x;
+
+                for (int i = 0; i < rotations; i++)
+                    (x, y) = (-y, x);
+
+                set.Add(new Vector3Int(
+                    Mathf.RoundToInt(x / VoxelMm),
+                    Mathf.RoundToInt(y / VoxelMm),
+                    Mathf.RoundToInt(p.z / VoxelMm)));
             }
+
             return set;
-        }
-
-        static void Accumulate(HashSet<Vector3Int> set, Vector3 v, float cx, float cy, float quantise, bool mirror, int rotations)
-        {
-            float x = v.x - cx;
-            float y = v.y - cy;
-
-            if (mirror)
-                x = -x;
-
-            for (int i = 0; i < rotations; i++)
-                (x, y) = (-y, x);
-
-            set.Add(new Vector3Int(
-                Mathf.RoundToInt(x / quantise),
-                Mathf.RoundToInt(y / quantise),
-                Mathf.RoundToInt(v.z / quantise)));
         }
 
         static float Jaccard(HashSet<Vector3Int> a, HashSet<Vector3Int> b)

@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &367843794
+--- !u!1 &20983723
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,10 +127,252 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 367843798}
-  - component: {fileID: 367843797}
-  - component: {fileID: 367843796}
-  - component: {fileID: 367843795}
+  - component: {fileID: 20983726}
+  - component: {fileID: 20983725}
+  - component: {fileID: 20983724}
+  m_Layer: 0
+  m_Name: Main Camera
+  m_TagString: MainCamera
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &20983724
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 20983723}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f1a78e7c09e14c238ac7ff2bcd32664, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.CameraRig.OrbitCamera
+  pivot: {x: 0, y: 0, z: 0}
+  distance: 3
+  yaw: 35
+  pitch: 38
+  minPitch: 5
+  maxPitch: 85
+  minDistance: 0.4
+  maxDistance: 60
+  orbitSpeed: 0.25
+  panSpeed: 1
+  zoomSpeed: 0.12
+  smoothing: 12
+--- !u!20 &20983725
+Camera:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 20983723}
+  m_Enabled: 1
+  serializedVersion: 2
+  m_ClearFlags: 2
+  m_BackGroundColor: {r: 0.07, g: 0.08, b: 0.1, a: 1}
+  m_projectionMatrixMode: 1
+  m_GateFitMode: 2
+  m_FOVAxisMode: 0
+  m_Iso: 200
+  m_ShutterSpeed: 0.005
+  m_Aperture: 16
+  m_FocusDistance: 10
+  m_FocalLength: 50
+  m_BladeCount: 5
+  m_Curvature: {x: 2, y: 11}
+  m_BarrelClipping: 0.25
+  m_Anamorphism: 0
+  m_SensorSize: {x: 36, y: 24}
+  m_LensShift: {x: 0, y: 0}
+  m_NormalizedViewPortRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+  near clip plane: 0.03
+  far clip plane: 200
+  field of view: 60
+  orthographic: 0
+  orthographic size: 5
+  m_Depth: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingPath: -1
+  m_TargetTexture: {fileID: 0}
+  m_TargetDisplay: 0
+  m_TargetEye: 3
+  m_HDR: 1
+  m_AllowMSAA: 1
+  m_AllowDynamicResolution: 0
+  m_ForceIntoRT: 0
+  m_OcclusionCulling: 1
+  m_StereoConvergence: 10
+  m_StereoSeparation: 0.022
+--- !u!4 &20983726
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 20983723}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &120387445
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 120387452}
+  - component: {fileID: 120387451}
+  - component: {fileID: 120387450}
+  - component: {fileID: 120387449}
+  - component: {fileID: 120387448}
+  - component: {fileID: 120387447}
+  - component: {fileID: 120387446}
+  m_Layer: 0
+  m_Name: Systems
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &120387446
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 120387445}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 99307f90a01da44cfa732e4e2cf43e65, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.BuildHud
+  controller: {fileID: 120387448}
+  stressTest: {fileID: 120387447}
+--- !u!114 &120387447
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 120387445}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0f4d4ace20b374762a1f6ac53a6f276c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.StressTest
+  controller: {fileID: 120387448}
+  factory: {fileID: 120387451}
+  partRoot: {fileID: 1557427700}
+  targetParts: 2000
+  withColliders: 1
+--- !u!114 &120387448
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 120387445}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7bdde03a98e9b4e3b9a77affeff2fa53, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.BuildController
+  factory: {fileID: 120387451}
+  raycaster: {fileID: 120387450}
+  orbitCamera: {fileID: 20983724}
+  ghost: {fileID: 120387449}
+  partRoot: {fileID: 1557427700}
+  highlightMaterial: {fileID: 2100000, guid: 8f1ca7a53185246759abad63c4193bec, type: 2}
+  SlotName: My Creation
+--- !u!114 &120387449
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 120387445}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2dcf3be2758384fbc8f47277ee9ad6ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.GhostPreview
+  ghostMaterial: {fileID: 2100000, guid: 36c041a304633479a8c7c15cc53bf95b, type: 2}
+  validTint: {r: 0.35, g: 1, b: 0.45, a: 0.5}
+  blockedTint: {r: 1, g: 0.3, b: 0.25, a: 0.5}
+  unsupportedTint: {r: 1, g: 0.75, b: 0.2, a: 0.5}
+--- !u!114 &120387450
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 120387445}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5567a73f08101491f8b1bfcc19a71958, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.World.BuildRaycaster
+  buildCamera: {fileID: 20983725}
+  partLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  maxDistance: 500
+--- !u!114 &120387451
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 120387445}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7d48acea46d346a4a2e45fc44e61685, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartFactory
+  partMaterial: {fileID: 2100000, guid: 464b9254521524007ba4bbff0be9895b, type: 2}
+  catalog: {fileID: 11400000, guid: 1c58232f5f6e140f4b7af9ae2618edf6, type: 2}
+--- !u!4 &120387452
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 120387445}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &375451418
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 375451422}
+  - component: {fileID: 375451421}
+  - component: {fileID: 375451420}
+  - component: {fileID: 375451419}
   m_Layer: 0
   m_Name: Ground
   m_TagString: Untagged
@@ -138,27 +380,27 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &367843795
+--- !u!114 &375451419
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 367843794}
+  m_GameObject: {fileID: 375451418}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 648877f3687bc414fa2a515be43ce243, type: 3}
   m_Name: 
   m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.World.InfiniteGround
-  targetCamera: {fileID: 1390366672}
+  targetCamera: {fileID: 20983725}
   snap: 0.16
---- !u!23 &367843796
+--- !u!23 &375451420
 MeshRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 367843794}
+  m_GameObject: {fileID: 375451418}
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
@@ -201,21 +443,21 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &367843797
+--- !u!33 &375451421
 MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 367843794}
+  m_GameObject: {fileID: 375451418}
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
---- !u!4 &367843798
+--- !u!4 &375451422
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 367843794}
+  m_GameObject: {fileID: 375451418}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -224,7 +466,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &425319989
+--- !u!1 &1557427699
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -232,8 +474,39 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 425319991}
-  - component: {fileID: 425319990}
+  - component: {fileID: 1557427700}
+  m_Layer: 0
+  m_Name: Parts
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1557427700
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1557427699}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2126816877
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2126816879}
+  - component: {fileID: 2126816878}
   m_Layer: 0
   m_Name: Directional Light
   m_TagString: Untagged
@@ -241,13 +514,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!108 &425319990
+--- !u!108 &2126816878
 Light:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 425319989}
+  m_GameObject: {fileID: 2126816877}
   m_Enabled: 1
   serializedVersion: 13
   m_Type: 1
@@ -306,286 +579,15 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
---- !u!4 &425319991
+--- !u!4 &2126816879
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 425319989}
+  m_GameObject: {fileID: 2126816877}
   serializedVersion: 2
   m_LocalRotation: {x: 0.3809789, y: 0.31993034, z: -0.14244218, w: 0.8556926}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1123100559
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1123100560}
-  m_Layer: 0
-  m_Name: Parts
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1123100560
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1123100559}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1194806640
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1194806647}
-  - component: {fileID: 1194806646}
-  - component: {fileID: 1194806645}
-  - component: {fileID: 1194806644}
-  - component: {fileID: 1194806643}
-  - component: {fileID: 1194806642}
-  - component: {fileID: 1194806641}
-  m_Layer: 0
-  m_Name: Systems
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1194806641
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1194806640}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 99307f90a01da44cfa732e4e2cf43e65, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.BuildHud
-  controller: {fileID: 1194806643}
-  stressTest: {fileID: 1194806642}
---- !u!114 &1194806642
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1194806640}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f4d4ace20b374762a1f6ac53a6f276c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.StressTest
-  controller: {fileID: 1194806643}
-  factory: {fileID: 1194806646}
-  partRoot: {fileID: 1123100560}
-  targetParts: 2000
-  withColliders: 1
---- !u!114 &1194806643
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1194806640}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7bdde03a98e9b4e3b9a77affeff2fa53, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.BuildController
-  factory: {fileID: 1194806646}
-  raycaster: {fileID: 1194806645}
-  orbitCamera: {fileID: 1390366671}
-  ghost: {fileID: 1194806644}
-  partRoot: {fileID: 1123100560}
---- !u!114 &1194806644
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1194806640}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2dcf3be2758384fbc8f47277ee9ad6ba, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.GhostPreview
-  ghostMaterial: {fileID: 2100000, guid: 36c041a304633479a8c7c15cc53bf95b, type: 2}
-  validTint: {r: 0.35, g: 1, b: 0.45, a: 0.5}
-  blockedTint: {r: 1, g: 0.3, b: 0.25, a: 0.5}
-  unsupportedTint: {r: 1, g: 0.75, b: 0.2, a: 0.5}
---- !u!114 &1194806645
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1194806640}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5567a73f08101491f8b1bfcc19a71958, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.World.BuildRaycaster
-  buildCamera: {fileID: 1390366672}
-  partLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  maxDistance: 500
---- !u!114 &1194806646
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1194806640}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e7d48acea46d346a4a2e45fc44e61685, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartFactory
-  partMaterial: {fileID: 2100000, guid: 464b9254521524007ba4bbff0be9895b, type: 2}
-  catalog: {fileID: 11400000, guid: 1c58232f5f6e140f4b7af9ae2618edf6, type: 2}
---- !u!4 &1194806647
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1194806640}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1390366670
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1390366673}
-  - component: {fileID: 1390366672}
-  - component: {fileID: 1390366671}
-  m_Layer: 0
-  m_Name: Main Camera
-  m_TagString: MainCamera
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1390366671
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1390366670}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6f1a78e7c09e14c238ac7ff2bcd32664, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.CameraRig.OrbitCamera
-  pivot: {x: 0, y: 0, z: 0}
-  distance: 3
-  yaw: 35
-  pitch: 38
-  minPitch: 5
-  maxPitch: 85
-  minDistance: 0.4
-  maxDistance: 60
-  orbitSpeed: 0.25
-  panSpeed: 1
-  zoomSpeed: 0.12
-  smoothing: 12
---- !u!20 &1390366672
-Camera:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1390366670}
-  m_Enabled: 1
-  serializedVersion: 2
-  m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.07, g: 0.08, b: 0.1, a: 1}
-  m_projectionMatrixMode: 1
-  m_GateFitMode: 2
-  m_FOVAxisMode: 0
-  m_Iso: 200
-  m_ShutterSpeed: 0.005
-  m_Aperture: 16
-  m_FocusDistance: 10
-  m_FocalLength: 50
-  m_BladeCount: 5
-  m_Curvature: {x: 2, y: 11}
-  m_BarrelClipping: 0.25
-  m_Anamorphism: 0
-  m_SensorSize: {x: 36, y: 24}
-  m_LensShift: {x: 0, y: 0}
-  m_NormalizedViewPortRect:
-    serializedVersion: 2
-    x: 0
-    y: 0
-    width: 1
-    height: 1
-  near clip plane: 0.03
-  far clip plane: 200
-  field of view: 60
-  orthographic: 0
-  orthographic size: 5
-  m_Depth: 0
-  m_CullingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_RenderingPath: -1
-  m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 0
-  m_TargetEye: 3
-  m_HDR: 1
-  m_AllowMSAA: 1
-  m_AllowDynamicResolution: 0
-  m_ForceIntoRT: 0
-  m_OcclusionCulling: 1
-  m_StereoConvergence: 10
-  m_StereoSeparation: 0.022
---- !u!4 &1390366673
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1390366670}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -596,8 +598,8 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1390366673}
-  - {fileID: 425319991}
-  - {fileID: 367843798}
-  - {fileID: 1194806647}
-  - {fileID: 1123100560}
+  - {fileID: 20983726}
+  - {fileID: 2126816879}
+  - {fileID: 375451422}
+  - {fileID: 120387452}
+  - {fileID: 1557427700}

@@ -26,4 +26,4 @@ MonoBehaviour:
   ports: []
   centerline: []
   mirrorOf: 
-  mirrorVerdict: 3
+  mirrorVerdict: 1

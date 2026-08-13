@@ -21,8 +21,19 @@ namespace BlockMarbleRun.EditorTools.Import
         const string GeneratedFolder = "Assets/Art/Meshes/Generated";
         const string DefinitionFolder = "Assets/Parts/Definitions";
 
+        /// <summary>
+        /// Re-derives every mirror verdict from scratch, discarding stored ones, and removes mirror
+        /// assets that are no longer justified. Needed whenever the chirality analysis itself changes:
+        /// the normal path deliberately preserves a stored verdict, which would otherwise keep four
+        /// wrongly-generated mirrors in the palette forever.
+        /// </summary>
+        [MenuItem("Block Marble Run/Reanalyse Mirrors")]
+        public static void Reanalyse() => Run(forceReanalyse: true);
+
         [MenuItem("Block Marble Run/Generate Part Definitions")]
-        public static void Run()
+        public static void Run() => Run(forceReanalyse: false);
+
+        static void Run(bool forceReanalyse)
         {
             Directory.CreateDirectory(GeneratedFolder);
             Directory.CreateDirectory(DefinitionFolder);
@@ -39,6 +50,10 @@ namespace BlockMarbleRun.EditorTools.Import
                 PartAnalysis analysis = PartAnalysis.Analyse(stlPath);
 
                 PartDefinition def = LoadOrCreate(name, ref created, ref updated);
+
+                if (forceReanalyse)
+                    def.mirrorVerdict = MirrorVerdict.Unreviewed;
+
                 ApplyDerived(def, analysis, name);
                 def.mesh = AssetDatabase.LoadAssetAtPath<Mesh>(stlPath);
                 EditorUtility.SetDirty(def);
@@ -48,11 +63,19 @@ namespace BlockMarbleRun.EditorTools.Import
                     GenerateMirror(stlPath, name, def, analysis);
                     mirrors++;
                 }
-                else if (def.mirrorVerdict == MirrorVerdict.Ambiguous)
+                else
                 {
-                    needsReview++;
-                    log.AppendLine($"  REVIEW {name}: mirror score {analysis.MirrorScore:0.00} " +
-                                   "sits between the thresholds. Open the part and set mirrorVerdict by hand.");
+                    // A part that is no longer chiral must lose its mirror, or the palette keeps
+                    // offering a duplicate that nothing regenerates and nobody notices.
+                    if (DeleteMirror(name))
+                        log.AppendLine($"  removed stale mirror for {name} (score {analysis.MirrorScore:0.00})");
+
+                    if (def.mirrorVerdict == MirrorVerdict.Ambiguous)
+                    {
+                        needsReview++;
+                        log.AppendLine($"  REVIEW {name}: mirror score {analysis.MirrorScore:0.00} " +
+                                       "sits between the thresholds. Open the part and set mirrorVerdict by hand.");
+                    }
                 }
             }
 
@@ -159,6 +182,25 @@ namespace BlockMarbleRun.EditorTools.Import
             def.centerline = MirrorBuilder.MirrorCenterline(source.centerline);
 
             EditorUtility.SetDirty(def);
+        }
+
+        /// <summary>Removes a generated mirror pair. Returns true if anything was there to remove.</summary>
+        static bool DeleteMirror(string sourceName)
+        {
+            string mirrorName = $"{sourceName}_mirror";
+            bool removed = false;
+
+            foreach (string path in new[]
+                     {
+                         $"{DefinitionFolder}/{mirrorName}.asset",
+                         $"{GeneratedFolder}/{mirrorName}.asset",
+                     })
+            {
+                if (AssetDatabase.LoadAssetAtPath<Object>(path) != null)
+                    removed |= AssetDatabase.DeleteAsset(path);
+            }
+
+            return removed;
         }
 
         static PartCategory GuessCategory(string name)

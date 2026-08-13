@@ -34,6 +34,8 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestTrackRejectsStacking();
             TestMultiLayerOccupancy();
             TestRemoveFreesCells();
+            TestColumnRestLayer();
+            TestBridgingTwoBlocks();
 
             string summary = $"[GridSelfTest] {_passed} passed, {_failed} failed.\n{_log}";
             if (_failed > 0)
@@ -166,6 +168,58 @@ namespace BlockMarbleRun.EditorTools.Tests
             map.Remove(part);
             Check("cells are freed after remove", map.CellCount == 0, $"got {map.CellCount}");
             Check("part list is empty after remove", map.Parts.Count == 0);
+        }
+
+        static void TestColumnRestLayer()
+        {
+            var map = new GridMap();
+            PartDefinition block = MakeDef("block_2x2", new Vector2Int(2, 2), 1, studs: true);
+            PartDefinition slide = MakeDef("slide_2x2", new Vector2Int(2, 2), 2, studs: false);
+
+            Check("empty column rests on the ground", map.ColumnRestLayer(0, 0) == 0);
+
+            map.Add(new PlacedPart(block, new GridCoord(0, 0, 0), 0, 0));
+            Check("column rests above a one-layer part", map.ColumnRestLayer(0, 0) == 1,
+                $"got {map.ColumnRestLayer(0, 0)}");
+
+            // A two-layer part must lift the rest height by two, not one.
+            map.Add(new PlacedPart(slide, new GridCoord(4, 0, 0), 0, 0));
+            Check("column clears a two-layer part", map.ColumnRestLayer(4, 0) == 2,
+                $"got {map.ColumnRestLayer(4, 0)}");
+
+            Check("neighbouring column is unaffected", map.ColumnRestLayer(9, 9) == 0);
+        }
+
+        /// <summary>
+        /// The case that prompted the change: a long part laid across two separated blocks should
+        /// rest on top of both, even though the cursor sits over the gap between them where there is
+        /// nothing but ground.
+        /// </summary>
+        static void TestBridgingTwoBlocks()
+        {
+            var map = new GridMap();
+            PartDefinition small = MakeDef("block_1x2", new Vector2Int(2, 1), 1, studs: true);
+            PartDefinition longPart = MakeDef("block_2x8", new Vector2Int(8, 1), 1, studs: true);
+
+            // Two supports with a two-stud gap: cells 0-1 and 6-7 occupied, 2-5 empty.
+            map.Add(new PlacedPart(small, new GridCoord(0, 0, 0), 0, 0));
+            map.Add(new PlacedPart(small, new GridCoord(6, 0, 0), 0, 0));
+
+            var spanning = new PlacedPart(longPart, new GridCoord(0, 0, 0), 0, 0);
+
+            int rest = 0;
+            foreach (GridCoord cell in spanning.OccupiedCells())
+                if (cell.layer == 0)
+                    rest = Mathf.Max(rest, map.ColumnRestLayer(cell.x, cell.y));
+
+            Check("a spanning part rests on top of both supports", rest == 1, $"got layer {rest}");
+
+            var bridged = new PlacedPart(longPart, new GridCoord(0, 0, rest), 0, 0);
+            Check("the bridged placement is valid", map.CanPlace(bridged) == PlacementResult.Valid,
+                map.CanPlace(bridged).ToString());
+
+            // The gap itself must stay empty underneath - bridging must not fill it in.
+            Check("the gap under the bridge stays open", !map.IsOccupied(new GridCoord(3, 0, 0)));
         }
 
         // --- helpers -------------------------------------------------------------------------

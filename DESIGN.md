@@ -195,25 +195,32 @@ The mirror is a derived asset regenerated on import, not a checked-in duplicate.
 > Is the mirrored mesh reproducible by any of the four yaw rotations?
 > Yes → **redundant**, skip. No → **chiral**, generate.
 
-Running that test over the current 20 parts (vertex-set overlap, mirror × each of 4 rotations, best score):
+**Compare volume, not vertices.** The first implementation compared quantised *vertex sets* and was wrong on four parts out of twenty, plus indecisive on two more. Mirroring a triangulated mesh does not reproduce the original vertex positions even when the solid is identical, so that test was measuring **tessellation**, not shape.
 
-| Part | best match | verdict |
-|---|---|---|
-| `track_2x2`, `crossing_2x2`, `u_turn` | 1.00 | redundant — mirror *is* a rotation |
-| `bridge_2x3` | 0.92 | redundant |
-| **`curve_2x2`** | **0.90** | **ambiguous — right on the threshold** |
-| `slide_2x4` | 0.50 | chiral → generate |
-| `terminal_2x2` | 0.22 | chiral → generate |
-| `slide_2x2` | 0.23 | chiral → generate |
-| `curve_4x4` | 0.12 | chiral → generate |
-| `u_turn_slide` | 0.03 | chiral → generate |
-| `slide_curve_4x4` | 0.01 | chiral → generate |
+The working test samples points across the surface — each triangle getting a share proportional to its area, so dense regions are not over-weighted — voxelises at 2 mm, and compares occupancy. Sampling uses a fixed-seed xorshift rather than `System.Random`: a verdict that changed between runs or Unity versions would be worse than a wrong one.
 
-The scores are strongly bimodal — except `curve_2x2` at 0.90, sitting exactly on any threshold you'd pick. Geometrically its mirror *should* be a pure rotation; it scores 0.90 rather than 1.00 because of asymmetric detail (stud/rib placement), not because of the arc.
+Results over the current 20 parts (mirror × each of 4 rotations, best score):
 
-That single case is the design conclusion: **the detector proposes, the author confirms.** The importer classifies each part `Redundant` / `Chiral` / `Ambiguous`, and `PartValidatorWindow` shows the source and mirrored meshes side by side with the score, defaulting to the detector's guess. Fully automatic mirroring would silently ship a duplicate `curve_2x2` — a palette that offers the same piece twice is a worse bug than a one-click confirmation step, because nobody reports it, they just find the palette confusing.
+| Part | vertex test | volume test | verdict |
+|---|---|---|---|
+| `track_2x2`, `crossing_2x2`, blocks | 1.00 | 1.00 | redundant |
+| `curve_2x2` | 0.90 *(ambiguous)* | **1.00** | redundant |
+| `bridge_2x3` | 0.92 *(ambiguous)* | **1.00** | redundant |
+| `slide_2x2` | 0.23 *(wrong)* | **1.00** | redundant |
+| `slide_2x4` | 0.50 *(wrong)* | **0.99** | redundant |
+| `curve_4x4` | 0.12 *(wrong)* | **0.99** | redundant |
+| `terminal_2x2` | 0.22 *(wrong)* | **0.99** | redundant |
+| `u_turn` | 1.00 | 0.98 | redundant |
+| `slide_curve_4x4` | 0.01 | **0.26** | chiral → generate |
+| `u_turn_slide` | 0.03 | **0.27** | chiral → generate |
 
-Store the confirmed verdict in the `PartDefinition` so re-imports don't re-ask.
+Only two parts in the set are genuinely handed. The scores are now sharply bimodal — 18 at 0.98–1.00, two at 0.26 — with nothing in between, so `Redundant ≥ 0.90` / `Chiral ≤ 0.75` is a comfortable split rather than a knife edge.
+
+Sample density matters: `slide_2x4` scored 0.85 at 60k samples and 0.99 at 250k, while the genuinely chiral parts stayed near 0.26 at every density. **Under-sampling looks exactly like chirality**, so the count is set well past where the scores stop moving.
+
+The classification is still `Redundant` / `Chiral` / `Ambiguous` with the verdict stored on the `PartDefinition`, and `PartValidatorWindow` shows both meshes for anything ambiguous. Fully automatic mirroring would silently ship duplicate parts — a palette offering the same piece twice is a bug nobody reports, they just find the palette confusing.
+
+Because verdicts are stored, changing the analysis needs an explicit **Reanalyse Mirrors** pass: it re-derives every verdict and deletes mirror assets that are no longer justified. Without it, the four bad mirrors would have stayed in the palette permanently.
 
 ---
 
@@ -303,8 +310,12 @@ Rotation of the footprint mask is a pure function in grid space; no transforms n
 
 **Placement loop**
 
-1. Raycast cursor → nearest of {top face of an existing part, ground plane at y=0} (§4.2).
-2. Convert hit point → `GridCoord` (round to half-stud, snap to `hitLayer + 1` on a part top, `0` on the ground plane).
+1. Raycast cursor → nearest of {top face of an existing part, ground plane at y=0} (§4.2). This gives the **column** only.
+2. Centre the footprint on that column, then compute the resting layer as the **maximum** `ColumnRestLayer` across every base cell of the footprint.
+
+Step 2 is the whole of the clutch behaviour, and getting it wrong is not subtle. Taking the height from the ray's hit point instead makes a whole class of build impossible: laying a long piece across two separated towers means pointing at the **gap** between them, where the ray finds nothing but ground, so the piece drops to the floor. A brick rests on the highest thing beneath *any* part of it, exactly as it would in the hand.
+
+Whether the studs actually line up is a **separate** question, answered by the support rule in §4.1 — the part comes to rest first, then the anti-studs are checked against the studs underneath. Conflating the two is what made placement feel like it was demanding the cursor be over one specific stud.
 3. Render **ghost** part at that coord: translucent, green if `GridMap` validates, red otherwise, tinted via `MaterialPropertyBlock`.
 4. Click / tap → issue a `PlacePartCommand`.
 
