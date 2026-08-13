@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da6a0d617f2b5439583cb3af12660b6f, type: 3}
+  m_Name: curve_4x4_mirror
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartDefinition
+  id: curve_4x4_mirror
+  displayName: Curve 4X4 (mirrored)
+  category: 2
+  mesh: {fileID: 4300000, guid: 58112635fda6e4b79bff3e9d1eb57bef, type: 2}
+  colliderPrefab: {fileID: 0}
+  footprintSize: {x: 4, y: 4}
+  footprintMask: 00000101000101010101010101010101
+  heightLayers: 1
+  topStuds: 00000000000000000000000000000000
+  bottomSockets: 00000101000101010101010101010101
+  rotation: 0
+  ports: []
+  centerline: []
+  mirrorOf: curve_4x4
+  mirrorVerdict: 2

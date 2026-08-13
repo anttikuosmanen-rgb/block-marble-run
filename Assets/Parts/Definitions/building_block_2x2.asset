@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da6a0d617f2b5439583cb3af12660b6f, type: 3}
+  m_Name: building_block_2x2
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartDefinition
+  id: building_block_2x2
+  displayName: Building Block 2X2
+  category: 0
+  mesh: {fileID: -8670151273213183110, guid: 0ae3de7d0a00a471a9fb184527964b5c, type: 3}
+  colliderPrefab: {fileID: 0}
+  footprintSize: {x: 2, y: 2}
+  footprintMask: 01010101
+  heightLayers: 1
+  topStuds: 01010101
+  bottomSockets: 01010101
+  rotation: 0
+  ports: []
+  centerline: []
+  mirrorOf: 
+  mirrorVerdict: 1

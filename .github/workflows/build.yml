@@ -1,0 +1,114 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# DESIGN.md §10: keeping the WebGL build green from M0 is deliberate. WebGL failures
+# (heap exhaustion, stripping breaking serialization, plugin gaps) surface as late
+# failures that can force architectural rework, so they are caught per-commit.
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Self-hosted: server can send Content-Encoding: br, so no JS decompressor ships.
+          - name: WebGL (self-host)
+            targetPlatform: WebGL
+            buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildWebGLSelfHost
+            artifact: webgl-selfhost
+          # GitHub Pages cannot set response headers, so the fallback decompressor is required.
+          - name: WebGL (Pages)
+            targetPlatform: WebGL
+            buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildWebGLPages
+            artifact: webgl-pages
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Library/ is the single biggest CI cost: without it every run re-imports all 20 STLs.
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-${{ matrix.targetPlatform }}-
+            Library-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: ${{ matrix.targetPlatform }}
+          buildMethod: ${{ matrix.buildMethod }}
+          allowDirtyBuild: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: build/${{ matrix.artifact }}
+
+  # macOS needs a mac runner; kept separate so a mac-runner outage cannot block the
+  # WebGL builds, which are the ones guarding the risky target.
+  build-macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-macOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-macOS-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: StandaloneOSX
+          buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildMacOS
+          allowDirtyBuild: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: build/macos
+
+  deploy-pages:
+    name: Deploy to Pages
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: webgl-pages
+          path: dist
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
