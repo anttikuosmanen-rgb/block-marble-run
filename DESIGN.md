@@ -321,7 +321,30 @@ interface IEditCommand { void Do(GridMap m); void Undo(GridMap m); }
 
 **Support cascade**: deleting a part can orphan parts above it. Orphans **stand** — never deleted, never dropped. They are highlighted in build mode and get scaffolding generated for them on the switch to Play (§5.1). This makes build mode fully permissive: you can start a track in mid-air and let the game work out how to hold it up.
 
-**Rendering budget**: start with one GameObject per part (MeshRenderer + SRP Batcher + GPU instancing on the material). Comfortable to a few thousand parts on macOS; WebGL2's higher per-draw-call cost brings that down, so the `RenderMeshInstanced` path batched by (mesh, color) — keeping collider GameObjects, which the data model already separates — is a *likely* need on WebGL rather than a hypothetical one. Measure at M1 with a 2000-part stress scene.
+### 5.2 Rendering budget — measured at M1
+
+One GameObject per part, with **one shared material per palette colour**. 2000 parts on WebGL, all visible:
+
+| Variant | Triangles | Frame time |
+|---|---|---|
+| `MaterialPropertyBlock` per brick, dense mesh | 16.7 M | 20 ms |
+| `MaterialPropertyBlock` per brick, **sparse mesh** | 4.2 M | 20 ms |
+| Single shared material, no per-brick colour | 16.7 M | 13 ms |
+| **Palette materials (shipped) — colour retained** | 16.7 M | **11 ms** |
+
+Two conclusions, both against expectation:
+
+**Geometry is not the bottleneck.** Cutting triangles fourfold changed nothing. The parts are print-resolution — a 2×2 brick is 8328 triangles with every stud and tube modelled — and at 16.7 M triangles the GPU was still running at ~790 M tris/s. It is not struggling; the frame is CPU-bound before geometry ever matters.
+
+**The property block was the cost.** A `MaterialPropertyBlock` opts its renderer out of the SRP Batcher, so per-brick colour was silently costing every brick its batching. Replacing it with one shared material per palette entry keeps the colour and gets the batching back.
+
+The shipped path beats even the colourless control: six shared materials batch at least as well as one, and each carries its colour in the material rather than in a per-renderer override. **2000 parts at 11 ms (~90 fps)** with full per-brick colour, so the 60 fps budget holds with room to spare.
+
+So per-instance colour is not free, but it is cheap *if it comes from a small set of shared materials rather than per-renderer overrides*. `RenderMeshInstanced` is **not** needed yet — revisit only if part counts climb well past 2000, and note it would have to solve colour the same way.
+
+Corollary for later milestones: **anything that colours many renderers must go through the palette materials.** Marbles, scaffolding (§5.1) and connection highlights (§6) are all tempting property-block candidates, and each would reintroduce this cost quietly.
+
+**This is also why the Blender LOD pass stays unbuilt** — §14 made triangle count the trigger, and the measurement says triangle count is not the problem.
 
 ---
 
@@ -534,7 +557,8 @@ M0–M2 give a usable brick editor; M4 is the first genuinely fun build. Ship-qu
 | Mesh colliders tank performance | Authored primitive-compound colliders per part type (§3.3); render mesh never used for collision |
 | New STL doesn't fit the 16 mm grid | Importer warns on non-`n*16-0.2` bounds; `PartValidatorWindow` shows the grid overlay |
 | Part-id churn breaks saves | Stable string ids + save `version` + migration chain from v1 |
-| Draw calls at large builds | GPU instancing → `RenderMeshInstanced` batched path → chunk mesh combine in Play mode |
+| Draw calls at large builds | **Measured (§5.2)**: per-brick `MaterialPropertyBlock` cost 20 ms vs 13 ms at 2000 parts by breaking SRP batching. Palette materials instead; `RenderMeshInstanced` held in reserve |
+| Per-instance colour silently disabling batching again | Colour comes from shared palette materials, never a property block, on any path that touches many renderers |
 | PhysX non-determinism | No replay-dependent features; record transforms if ever needed |
 | **WebGL heap exhaustion** on big builds | Welded meshes, non-readable render meshes, primitive colliders, instanced rendering; measure with a 2000-part scene at M1 |
 | **WebGL single-thread physics stall** | Marble cap (16 soft / 32 hard), `maximumDeltaTime` clamp, drop 120→90 Hz before ever dropping CCD |
@@ -641,6 +665,10 @@ Currently §3 assumes a `.stl` ScriptedImporter does everything in-Unity. A Blen
 
 **Decision: start without it.** Ship the ScriptedImporter alone through M4.
 
-**Revisit trigger**: the M1 WebGL 2000-part stress test. If triangle count (not draw calls) is the bottleneck, add the pass **for LODs only** — the one item on the list Unity genuinely cannot do itself. Draw-call bottlenecks are answered by instancing (§5) instead, not by Blender; distinguish the two before reaching for the toolchain.
+**The revisit trigger has now fired and come back negative.** The M1 stress test (§5.2) cut triangles fourfold across 2000 parts and measured *no* change in frame time — the frame is CPU-bound on draw submission, and the GPU was comfortable at 16.7 M triangles. LODs would have bought nothing.
+
+Worth recording as a near miss: the triangle counts *look* alarming (8328 for a 2×2 brick, 22k for a 2×10) and the throughput figure alone was consistent with being geometry-bound. Building the Blender pass on that reasoning would have added a toolchain dependency, cost the drop-in property, and fixed nothing. The sparse-mesh variant took one keypress to run and settled it.
+
+**New trigger**: if a future profile shows geometry cost rising above draw-submission cost — most likely from far higher part counts, or from shadow passes multiplying the geometry — re-run the sparse-mesh comparison first, and only then reach for Blender.
 
 If it does get added, keep it a CI step that reads `Art/Meshes/*.stl` and writes `Art/Meshes/Generated/*_lod1.mesh`, so the drop-in property survives.

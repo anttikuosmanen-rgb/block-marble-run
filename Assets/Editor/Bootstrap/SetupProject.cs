@@ -22,9 +22,44 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
         {
             ConfigureRendering();
             ConfigurePhysics();
+            ConfigureInput();
             EnsureMainScene();
             AssetDatabase.SaveAssets();
             Debug.Log("[Setup] Rendering, physics and build scene configured.");
+        }
+
+        /// <summary>
+        /// Switches the player to the Input System package. Until this is set, Mouse.current and
+        /// Keyboard.current return null at runtime and every input read silently does nothing - the
+        /// project would build and run with no controls at all.
+        /// </summary>
+        static void ConfigureInput()
+        {
+            const int InputSystemOnly = 1;
+
+            Object[] assets = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/ProjectSettings.asset");
+            if (assets == null || assets.Length == 0)
+            {
+                Debug.LogError("[Setup] Could not open ProjectSettings.asset; input handler unchanged.");
+                return;
+            }
+
+            var so = new SerializedObject(assets[0]);
+            SerializedProperty handler = so.FindProperty("activeInputHandler");
+
+            if (handler == null)
+            {
+                Debug.LogError("[Setup] activeInputHandler not found; input handler unchanged.");
+                return;
+            }
+
+            if (handler.intValue == InputSystemOnly)
+                return;
+
+            handler.intValue = InputSystemOnly;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            AssetDatabase.SaveAssets();
+            Debug.Log("[Setup] Active input handler set to Input System.");
         }
 
         /// <summary>

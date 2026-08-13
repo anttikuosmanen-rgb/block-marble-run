@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d430107530e4401d91dca4f25cc4759, type: 3}
+  m_Name: PartCatalog
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartCatalog
+  parts:
+  - {fileID: 11400000, guid: 598baa51206754ccfa864f8fcb88ef75, type: 2}
+  - {fileID: 11400000, guid: 0a17bad76a8dd4388ad064935dd971ed, type: 2}
+  - {fileID: 11400000, guid: 88780bee92ab54a758de1fee9caf7af4, type: 2}
+  - {fileID: 11400000, guid: 782ed5062c4314638a981d6fb320b50b, type: 2}
+  - {fileID: 11400000, guid: cf0a2878f4a574395a29c193f395d3a7, type: 2}
+  - {fileID: 11400000, guid: 044ee55ec5c0b4a04b8b294b2f8d0d74, type: 2}
+  - {fileID: 11400000, guid: c0a8c4ce1f89c40c6abd1bffab058cf0, type: 2}
+  - {fileID: 11400000, guid: 941f4d64ca653405f9997deda036e5c7, type: 2}
+  - {fileID: 11400000, guid: 98a6e47f3bf864f15a8f25da72cb5d4b, type: 2}
+  - {fileID: 11400000, guid: 1eaf62aa99ec1439983c84f71255a275, type: 2}
+  - {fileID: 11400000, guid: 48f56b47ba2a744518bc37911fcbfd8c, type: 2}
+  - {fileID: 11400000, guid: ee668b62276c74bd2879e27cef779022, type: 2}
+  - {fileID: 11400000, guid: 04220e2d0899d43fabd4f931b9b1f862, type: 2}
+  - {fileID: 11400000, guid: 5fc0a95b09b614500a930c42fd826ee8, type: 2}
+  - {fileID: 11400000, guid: 4381b818324a24d3894715ebfe619872, type: 2}
+  - {fileID: 11400000, guid: 249df0479f80a411a962dbc032d6da03, type: 2}
+  - {fileID: 11400000, guid: 67c8269faa0464c63964a08e3c97e7ce, type: 2}
+  - {fileID: 11400000, guid: fef370dfb1f854f55b687fc26247a89f, type: 2}
+  - {fileID: 11400000, guid: 1155244646e964a5ba328ec1220174d4, type: 2}
+  - {fileID: 11400000, guid: a04fb932522884a8ca67feda9d591318, type: 2}
+  - {fileID: 11400000, guid: ddee7579a0fd7476ea20234fff44f9cd, type: 2}
+  - {fileID: 11400000, guid: 390e13ca63d124b7f850fa7c73176761, type: 2}
+  - {fileID: 11400000, guid: 1a2d4db409e5a4bd396111d121e367c7, type: 2}
+  - {fileID: 11400000, guid: 0dc9dfc33ddca401f963ca44e0c7a4d9, type: 2}
+  - {fileID: 11400000, guid: 29554f921fc8341cba274e13c3dd1486, type: 2}
+  - {fileID: 11400000, guid: 2ca56e1ef90e442fd81ad6cedd6f9478, type: 2}
+  palette:
+  - {r: 0.85, g: 0.18, b: 0.16, a: 1}
+  - {r: 0.95, g: 0.68, b: 0.1, a: 1}
+  - {r: 0.13, g: 0.42, b: 0.72, a: 1}
+  - {r: 0.25, g: 0.6, b: 0.28, a: 1}
+  - {r: 0.92, g: 0.92, b: 0.9, a: 1}
+  - {r: 0.3, g: 0.32, b: 0.36, a: 1}

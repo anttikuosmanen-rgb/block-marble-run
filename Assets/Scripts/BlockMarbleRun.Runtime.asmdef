@@ -1,7 +1,9 @@
 {
     "name": "BlockMarbleRun.Runtime",
     "rootNamespace": "BlockMarbleRun",
-    "references": [],
+    "references": [
+        "Unity.InputSystem"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
