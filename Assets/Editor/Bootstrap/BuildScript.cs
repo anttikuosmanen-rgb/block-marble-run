@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
@@ -95,6 +96,25 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
 
             if (summary.result != BuildResult.Succeeded)
                 throw new Exception($"Build failed: {summary.result}");
+
+            StripDebugArtifacts(options.locationPathName);
+        }
+
+        /// <summary>
+        /// Unity emits a BurstDebugInformation_DoNotShip folder beside the player. The name is the
+        /// instruction: without this it would be published to Pages along with the build.
+        /// </summary>
+        static void StripDebugArtifacts(string outputPath)
+        {
+            string parent = Directory.Exists(outputPath) ? outputPath : Path.GetDirectoryName(outputPath);
+            if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent))
+                return;
+
+            foreach (string dir in Directory.GetDirectories(parent, "*DoNotShip*", SearchOption.AllDirectories))
+            {
+                Directory.Delete(dir, recursive: true);
+                Debug.Log($"[Build] Removed {Path.GetFileName(dir)}");
+            }
         }
     }
 }

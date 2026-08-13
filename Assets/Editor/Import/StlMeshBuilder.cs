@@ -21,7 +21,17 @@ namespace BlockMarbleRun.EditorTools.Import
 
         public static Mesh Build(List<StlFacet> facets, float scale, float smoothingAngleDeg, string name)
         {
-            int windingVotes = 0;
+            // Area-weighted, and deliberately un-normalised. Two reasons, both learned the hard way:
+            //
+            // Vector3.normalized silently returns zero below a magnitude of 1e-5, and a triangle's
+            // cross product is twice its area - so every sliver on a stud or tube normalised to zero,
+            // scored Dot == 0, and fell on the "agrees" side of the test. Parts with dense stud
+            // tessellation then outvoted themselves and imported inside out, while coarser parts
+            // survived. building_block_2x6 decided it by 716 votes out of 16852.
+            //
+            // Weighting by area also means large, numerically trustworthy faces dominate, instead of
+            // a thousand slivers with poor float precision counting as much as the walls they sit on.
+            double windingScore = 0.0;
 
             // Transform first, then decide winding from the transformed data so the vote is made in
             // the same space the mesh will live in.
@@ -41,15 +51,14 @@ namespace BlockMarbleRun.EditorTools.Import
                 if (t.Normal.sqrMagnitude > 1e-12f)
                 {
                     Vector3 geometric = Vector3.Cross(t.B - t.A, t.C - t.A);
-                    if (geometric.sqrMagnitude > 1e-20f)
-                        windingVotes += Vector3.Dot(geometric.normalized, t.Normal.normalized) < 0f ? -1 : 1;
+                    windingScore += Vector3.Dot(geometric, t.Normal.normalized);
                 }
             }
 
             // A global flip rather than a per-triangle one: a mesh where some faces were flipped and
             // others were not would be worse than either consistent choice, and disagreement here
             // means the file's normals are unreliable, not that the model is genuinely mixed.
-            bool flipWinding = windingVotes < 0;
+            bool flipWinding = windingScore < 0.0;
 
             var welder = new VertexWelder(smoothingAngleDeg);
             var indices = new List<int>(facets.Count * 3);
@@ -86,6 +95,26 @@ namespace BlockMarbleRun.EditorTools.Import
             mesh.RecalculateBounds();
 
             return mesh;
+        }
+
+        /// <summary>
+        /// Signed volume of a closed mesh under Unity's winding convention: positive when faces point
+        /// outward, negative when the mesh is inverted. Independent of the facet normals the vote
+        /// relies on, which is the point - it is a second opinion derived purely from geometry, so it
+        /// catches an inside-out import that the vote got wrong.
+        ///
+        /// Meaningless for an open mesh, so callers should treat a near-zero result as "no opinion".
+        /// </summary>
+        public static double SignedVolume(Mesh mesh)
+        {
+            Vector3[] v = mesh.vertices;
+            int[] t = mesh.triangles;
+
+            double total = 0.0;
+            for (int i = 0; i < t.Length; i += 3)
+                total += Vector3.Dot(v[t[i]], Vector3.Cross(v[t[i + 1]], v[t[i + 2]]));
+
+            return total / 6.0;
         }
 
         /// <summary>

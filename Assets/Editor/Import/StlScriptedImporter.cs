@@ -17,7 +17,7 @@ namespace BlockMarbleRun.EditorTools.Import
     public sealed class StlScriptedImporter : ScriptedImporter
     {
         /// <summary>Bump to force Unity to re-run the importer over every .stl after a logic change.</summary>
-        const int Version = 4;
+        const int Version = 6;
 
         /// <summary>
         /// Source STLs are in millimetres. 0.01 puts the project at 1 unit = 10 cm, which keeps a
@@ -46,6 +46,18 @@ namespace BlockMarbleRun.EditorTools.Import
 
             string meshName = System.IO.Path.GetFileNameWithoutExtension(ctx.assetPath);
             Mesh mesh = StlMeshBuilder.Build(facets, scale, smoothingAngle, meshName);
+
+            // Cross-check the winding decision against the mesh's own geometry before the CPU copy is
+            // discarded. An inverted import is invisible in the numbers and only shows up as a part
+            // rendering inside out, so it needs to fail loudly here rather than wait to be spotted
+            // by eye. Near-zero means the mesh is not closed, in which case volume proves nothing.
+            double volume = StlMeshBuilder.SignedVolume(mesh);
+            if (volume < 0.0 && System.Math.Abs(volume) > 1e-9)
+            {
+                ctx.LogImportError(
+                    $"'{meshName}' imported inside out (signed volume {volume:0.######}). " +
+                    "The winding vote disagreed with the geometry; check the facet normals in the source file.");
+            }
 
             mesh.UploadMeshData(!readable);
 
