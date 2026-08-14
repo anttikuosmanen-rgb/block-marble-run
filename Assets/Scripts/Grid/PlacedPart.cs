@@ -73,7 +73,12 @@ namespace BlockMarbleRun.Grid
                 Vector2Int r = RotateCell(new Vector2Int(x, y), size, Rotation);
 
                 for (int layer = 0; layer < layers; layer++)
-                    yield return new GridCoord(Origin.x + r.x, Origin.y + r.y, Origin.layer + layer);
+                {
+                    // Per layer, so a ramp's open underside stays free rather than being claimed by
+                    // the part hanging above it.
+                    if (Definition.OccupiesCell(x, y, layer))
+                        yield return new GridCoord(Origin.x + r.x, Origin.y + r.y, Origin.layer + layer);
+                }
             }
         }
 
@@ -105,6 +110,129 @@ namespace BlockMarbleRun.Grid
         }
 
         /// <summary>
+        /// A channel mouth in world terms: which cell it sits on, which way it faces, and the height
+        /// of its channel floor.
+        /// </summary>
+        public readonly struct WorldPort
+        {
+            /// <summary>Mouth centre in world half-studs. Two mouths meet only when these are equal.</summary>
+            public readonly Vector2Int MidlineHalfStuds;
+
+            public readonly Facing Facing;
+            public readonly float HeightUnits;
+            public readonly int WidthStuds;
+
+            public WorldPort(Vector2Int midlineHalfStuds, Facing facing, float heightUnits, int widthStuds)
+            {
+                MidlineHalfStuds = midlineHalfStuds;
+                Facing = facing;
+                HeightUnits = heightUnits;
+                WidthStuds = widthStuds;
+            }
+
+            public static Facing Opposite(Facing facing) => (Facing)(((int)facing + 2) % 4);
+
+            /// <summary>
+            /// The cells immediately outside the mouth, where a part continuing this run would sit.
+            /// Used only to find candidates; whether they actually join is decided by comparing
+            /// midlines exactly.
+            /// </summary>
+            /// <summary>The cells just inside the mouth - the part's own geometry at the channel end.</summary>
+            public IEnumerable<Vector2Int> InsideCells()
+            {
+                bool alongX = Facing == Facing.North || Facing == Facing.South;
+                int halfWidth = Mathf.Max(1, WidthStuds) / 2;
+
+                int centreAlong = (alongX ? MidlineHalfStuds.x : MidlineHalfStuds.y) / 2;
+                int across = (alongX ? MidlineHalfStuds.y : MidlineHalfStuds.x) / 2;
+
+                // The mirror of OutsideCells: whichever side of the boundary that one is not on.
+                int inside = Facing is Facing.North or Facing.East ? across - 1 : across;
+
+                for (int offset = -halfWidth; offset < halfWidth; offset++)
+                {
+                    int along = centreAlong + offset;
+                    yield return alongX ? new Vector2Int(along, inside) : new Vector2Int(inside, along);
+                }
+            }
+
+            /// <summary>Absolute layer the channel floor sits in, for sizing a pillar under it.</summary>
+            public int FloorLayer => Mathf.FloorToInt(HeightUnits / GridCoord.LayerUnits + 0.001f);
+
+            public IEnumerable<Vector2Int> OutsideCells()
+            {
+                bool alongX = Facing == Facing.North || Facing == Facing.South;
+
+                // The midline sits on a stud boundary, so the mouth spans width/2 studs either side.
+                int halfWidth = Mathf.Max(1, WidthStuds) / 2;
+
+                int centreAlong = (alongX ? MidlineHalfStuds.x : MidlineHalfStuds.y) / 2;
+                int across = (alongX ? MidlineHalfStuds.y : MidlineHalfStuds.x) / 2;
+
+                // North and East open onto the cell the boundary line touches; South and West onto
+                // the one behind it.
+                int outside = Facing is Facing.North or Facing.East ? across : across - 1;
+
+                for (int offset = -halfWidth; offset < halfWidth; offset++)
+                {
+                    int along = centreAlong + offset;
+                    yield return alongX ? new Vector2Int(along, outside) : new Vector2Int(outside, along);
+                }
+            }
+        }
+
+        /// <summary>Millimetres to world units, matching the STL import scale.</summary>
+        public const float MmToUnits = 0.01f;
+
+        /// <summary>
+        /// This part's channel mouths, rotated and placed into the world.
+        ///
+        /// A quarter turn maps +X to -Y, which advances a facing by one step - the same relationship
+        /// the footprint rotation uses, so cells and facings can never disagree about which way a
+        /// rotated part points.
+        /// </summary>
+        public IEnumerable<WorldPort> WorldPorts()
+        {
+            TrackPort[] ports = Definition.ports;
+            if (ports == null)
+                yield break;
+
+            Vector2Int halfStudSize = Definition.footprintSize * 2;
+
+            foreach (TrackPort port in ports)
+            {
+                Vector2Int midline = RotateHalfStudPoint(port.midlineHalfStuds, halfStudSize, Rotation);
+                var facing = (Facing)(((int)port.facing + Rotation) % 4);
+
+                yield return new WorldPort(
+                    new Vector2Int(Origin.x * 2 + midline.x, Origin.y * 2 + midline.y),
+                    facing,
+                    Origin.layer * GridCoord.LayerUnits + port.heightMm * MmToUnits,
+                    Mathf.Max(1, port.widthStuds));
+            }
+        }
+
+        /// <summary>
+        /// Rotates a point measured from the footprint's min corner, in half-studs.
+        ///
+        /// This is the continuous form of <see cref="RotateCell"/>: a quarter turn sends (x, y) to
+        /// (y, width - x). Cell rotation subtracts one because it names a cell rather than a position,
+        /// and using that form here would shift every mouth half a stud off the boundary it sits on.
+        /// </summary>
+        public static Vector2Int RotateHalfStudPoint(Vector2Int point, Vector2Int halfStudSize, int rotation)
+        {
+            for (int i = 0; i < rotation; i++)
+            {
+                point = new Vector2Int(point.y, halfStudSize.x - point.x);
+                halfStudSize = new Vector2Int(halfStudSize.y, halfStudSize.x);
+            }
+
+            return point;
+        }
+
+        public bool HasPorts => Definition.ports is { Length: > 0 };
+
+        /// <summary>
         /// World transform for the rendered mesh. Meshes are modelled centred on their footprint with
         /// the base at zero, so the part sits at the centre of the cells it occupies.
         /// </summary>
@@ -112,12 +240,20 @@ namespace BlockMarbleRun.Grid
         {
             Vector2Int size = RotatedSize;
 
-            position = new Vector3(
+            var footprintCentre = new Vector3(
                 (Origin.x + size.x * 0.5f) * GridCoord.StudUnits,
                 Origin.layer * GridCoord.LayerUnits,
                 (Origin.y + size.y * 0.5f) * GridCoord.StudUnits);
 
             rotation = Quaternion.Euler(0f, 90f * Rotation, 0f);
+
+            // Line the mesh's own centre up with the footprint's, instead of assuming the mesh was
+            // modelled centred on its origin. Most are, but u_turn runs from -15.9 to +62.3 mm in X
+            // and u_turn_slide is offset by a full stud in Y; drawing those as centred puts the
+            // geometry a stud away from the cells it occupies, so channels appear to join one stud
+            // inside the neighbouring piece while the grid considers them correctly aligned.
+            Vector2 pivot = Definition.pivotOffsetUnits;
+            position = footprintCentre - rotation * new Vector3(pivot.x, 0f, pivot.y);
         }
     }
 }

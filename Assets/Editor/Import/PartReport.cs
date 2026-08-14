@@ -17,6 +17,18 @@ namespace BlockMarbleRun.EditorTools.Import
     {
         const string MeshFolder = "Assets/Art/Meshes";
 
+        static string DescribePorts(PartAnalysis a)
+        {
+            if (a.Ports.Count == 0)
+                return "-";
+
+            var described = new List<string>(a.Ports.Count);
+            foreach (BlockMarbleRun.Parts.TrackPort port in a.Ports)
+                described.Add($"{port.facing.ToString()[0]}[{port.midlineHalfStuds.x},{port.midlineHalfStuds.y}]w{port.widthStuds}@{port.heightMm:0.#}");
+
+            return string.Join(" ", described);
+        }
+
         [MenuItem("Block Marble Run/Report Parts")]
         public static void Run()
         {
@@ -26,7 +38,7 @@ namespace BlockMarbleRun.EditorTools.Import
             var sb = new StringBuilder();
             sb.AppendLine($"Analysed {paths.Length} parts from {MeshFolder}");
             sb.AppendLine();
-            sb.AppendLine($"{"part",-24} {"size mm",-22} {"studs",-8} {"lay",-4} {"studs?",-7} {"mirror",-11} {"score",-6} cells");
+            sb.AppendLine($"{"part",-24} {"studs",-8} {"lay",-4} {"top",-5} {"mirror",-11} {"score",-6} ports");
             sb.AppendLine(new string('-', 110));
 
             var warnings = new List<string>();
@@ -44,13 +56,12 @@ namespace BlockMarbleRun.EditorTools.Import
 
                 sb.AppendLine(
                     $"{name,-24} " +
-                    $"{$"{a.SizeMm.x:0.0}x{a.SizeMm.y:0.0}x{a.SizeMm.z:0.0}",-22} " +
                     $"{$"{a.FootprintSize.x}x{a.FootprintSize.y}",-8} " +
                     $"{a.HeightLayers,-4} " +
-                    $"{(a.HasTopStuds ? "yes" : "no"),-7} " +
+                    $"{(a.HasTopStuds ? "yes" : "no"),-5} " +
                     $"{a.MirrorVerdict,-11} " +
                     $"{a.MirrorScore,-6:0.00} " +
-                    $"{cells}/{a.FootprintSize.x * a.FootprintSize.y}");
+                    $"{DescribePorts(a)}");
 
                 mesh.TryGetValue(a.MirrorVerdict, out int n);
                 mesh[a.MirrorVerdict] = n + 1;

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using BlockMarbleRun.Parts;
 using UnityEngine;
 
 namespace BlockMarbleRun.Grid
@@ -73,12 +74,87 @@ namespace BlockMarbleRun.Grid
         }
 
         /// <summary>
-        /// Ground level supports anything. Above it, at least one of the part's base cells must rest
-        /// on a stud - which is why nothing stacks on track pieces, since they expose none.
+        /// Channel mouths clutch to each other exactly as studs clutch to anti-studs: two parts whose
+        /// channels meet, face to face and at the same height, hold each other up.
+        ///
+        /// Without this a track laid out at height is "floating" no matter how solidly it is joined
+        /// to the run it continues, and the build would sprout scaffolding under a track that is
+        /// already attached at both ends.
+        /// </summary>
+        public bool HasPortConnection(PlacedPart part)
+        {
+            foreach (PlacedPart.WorldPort port in part.WorldPorts())
+                if (FindConnection(part, port) != null)
+                    return true;
+
+            return false;
+        }
+
+        /// <summary>Half a millimetre at project scale; channel floors land on exact layer multiples.</summary>
+        const float HeightTolerance = 0.005f;
+
+        /// <summary>
+        /// The part whose channel joins this mouth, or null.
+        ///
+        /// Mouths meet only when their centre lines coincide exactly. Matching per-cell instead let a
+        /// run join while offset by one stud, since one cell of a two-stud mouth still overlapped one
+        /// cell of its neighbour - the joint reported as connected while the channels visibly stepped
+        /// sideways.
+        /// </summary>
+        public PlacedPart FindConnection(PlacedPart part, PlacedPart.WorldPort port)
+        {
+            Facing wanted = PlacedPart.WorldPort.Opposite(port.Facing);
+
+            foreach (Vector2Int cell in port.OutsideCells())
+            {
+                foreach (PlacedPart other in PartsInColumn(cell.x, cell.y))
+                {
+                    if (ReferenceEquals(other, part))
+                        continue;
+
+                    foreach (PlacedPart.WorldPort otherPort in other.WorldPorts())
+                    {
+                        if (otherPort.Facing != wanted)
+                            continue;
+
+                        if (otherPort.MidlineHalfStuds != port.MidlineHalfStuds)
+                            continue;
+
+                        if (Mathf.Abs(otherPort.HeightUnits - port.HeightUnits) <= HeightTolerance)
+                            return other;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>Distinct parts occupying any layer of a column, lowest first.</summary>
+        public IEnumerable<PlacedPart> PartsInColumn(int x, int y)
+        {
+            PlacedPart previous = null;
+
+            for (int layer = 0; layer <= _maxLayer; layer++)
+            {
+                PlacedPart part = _cells.GetValueOrDefault(new GridCoord(x, y, layer));
+                if (part == null || ReferenceEquals(part, previous))
+                    continue;
+
+                previous = part;
+                yield return part;
+            }
+        }
+
+        /// <summary>
+        /// Ground level supports anything. Above it, a part is held either by a stud underneath or by
+        /// a channel joined to a neighbouring channel - the two clutch systems are equal in standing.
         /// </summary>
         public bool IsSupported(PlacedPart part)
         {
             if (part.Origin.layer == 0)
+                return true;
+
+            if (HasPortConnection(part))
                 return true;
 
             foreach (GridCoord cell in part.OccupiedCells())

@@ -116,7 +116,13 @@ namespace BlockMarbleRun.EditorTools.Import
             def.footprintSize = analysis.FootprintSize;
             def.footprintMask = analysis.FootprintMask;
             def.heightLayers = analysis.HeightLayers;
+            def.pivotOffsetUnits = analysis.PivotOffsetUnits;
+            def.layerMasks = analysis.LayerMasks;
             def.topStuds = analysis.TopStuds;
+
+            // Ports are derived, not authored: the geometry states them unambiguously (DESIGN.md §6),
+            // and hand-entered coordinates would drift from the mesh the first time a part changes.
+            def.ports = analysis.Ports.ToArray();
 
             if (def.bottomSockets == null || def.bottomSockets.Length != analysis.FootprintMask.Length)
                 def.bottomSockets = (bool[])analysis.FootprintMask.Clone();
@@ -172,6 +178,7 @@ namespace BlockMarbleRun.EditorTools.Import
             def.mirrorVerdict = MirrorVerdict.Chiral;
             def.mesh = mesh;
             def.heightLayers = source.heightLayers;
+            def.pivotOffsetUnits = new Vector2(-source.pivotOffsetUnits.x, source.pivotOffsetUnits.y);
             def.footprintSize = source.footprintSize;
             def.rotation = source.rotation;
 

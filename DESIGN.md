@@ -77,7 +77,19 @@ Track parts are exactly 1 layer tall with no top studs → **uniform single-laye
 
 So footprint derivation is two-source (§3.2): bounding box gives a candidate, **underside socket geometry** confirms it. Where they disagree, the importer flags the part for human confirmation rather than guessing.
 
-### 1.2 Pivot / parity gotcha
+### 1.2 Meshes are not all centred on their footprint
+
+Most are, but two are not: `u_turn` spans −15.9…+62.3 mm in X, and `u_turn_slide` is offset by a full stud in Y. Positioning those as though centred draws the geometry a stud away from the cells it occupies, so their channels appear to join one stud *inside* the neighbouring piece while the grid considers them correctly aligned.
+
+Each part therefore stores a pivot offset, applied through the placement rotation. It is measured from the mesh's **minimum corner**, not its bounding-box centre: a part that stops short of its footprint does so on one side only — `u_turn`'s open mouth side has no wall to reach the boundary — so centring splits that 1.6 mm shortfall across both sides and leaves the piece a fraction of a stud out of true. The walled side is flush with the grid and is what the geometry should align to.
+
+### 1.3 Parts are not all solid prisms
+
+Undersides measured per cell: `slide_2x4` reaches its base everywhere, but `slide_curve_4x4` ramps from 18 mm down to 0, so its raised end occupies **only the upper layer**.
+
+Occupancy is therefore stored **per layer**, not as one footprint repeated up the part's height. Treating a ramp as solid claims the space under its raised end — space a support pillar needs to stand in — and the pillar then collides with the very part it was meant to carry.
+
+### 1.4 Pivot / parity gotcha
 
 `1x2` spans 2 studs in X (center falls on a stud *boundary*) and 1 stud in Y (center falls on a stud *center*). Mixing parities breaks naive integer snapping.
 
@@ -262,8 +274,8 @@ class PlacedPart {
 
 ### 4.1 Placement rules
 
-1. Every cell of the rotated footprint, across all `heightLayers`, must be free.
-2. **Support**: `layer == 0` **or** at least one bottom-socket cell rests on a cell whose part exposes a top stud. Matches real Duplo and blocks floating builds.
+1. Every cell the part actually fills must be free — per layer (§1.3), not the footprint repeated up its height.
+2. **Support**: `layer == 0`, **or** a bottom-socket cell rests on a stud below, **or** a channel mouth joins a neighbouring mouth (§6). The two clutch systems are equal in standing.
 3. Track parts have no top studs → nothing stacks on track (correct: real Duplo track pieces are terminal). Bridge parts, when added, get `topStuds` set.
 
 There is **no bounds check** — see §4.2.
@@ -361,71 +373,51 @@ Corollary for later milestones: **anything that colours many renderers must go t
 
 ### 5.1 Auto-generated supports
 
-Floating parts are not an error state — they are a *normal build style*. Requiring a player to hand-build a pillar under every raised curve is exactly the tedium that kills a toy. So: **build freely in mid-air; on the switch to Play, the game generates the scaffolding.**
+Floating parts are not an error state — they are a *normal build style*. Requiring a player to hand-build a pillar under every raised curve is exactly the tedium that kills a toy. So: **build freely in mid-air; the game builds the pillars.**
 
-**Ground-connectivity pass** (run on every `GridMap` mutation, incremental):
+**Real bricks, at placement time.** The original plan deferred scaffolding to the switch into play mode. That reads badly while building — a piece hangs in mid-air with nothing under it and the player has to take on trust that something will appear later. Building the support immediately makes the structure truthful at every moment, and the bricks can be edited or deleted like anything else. Part and pillars are one history entry, so a single undo removes both.
 
-```
-groundSet = BFS upward from all layer-0 parts, following stud-support edges
-orphans   = allParts \ groundSet
-```
+**Only channel parts prop themselves up.** A brick is the player's own structure and may cantilever as far as they like; a run of track is meant to look carried.
 
-**Scaffold generation** (on Build → Play):
+**Pillars stand under the mouths**, not under the footprint's corners. Most of a 4×4 curve's square is empty arc that needs nothing; the ends are what a channel actually rests on.
 
-```
-for each orphan, in ascending layer order:
-    if now ground-connected (an earlier scaffold reached it): skip
-    pick anchor cells from its footprint mask:
-        span <= 2 studs  -> 1 cell  (centroid, snapped into the mask)
-        larger           -> the mask's corner cells, max 4
-    for each anchor (x, y):
-        drop from layer-1 downward to the first occupied cell, or to layer 0
-        emit ScaffoldColumn(x, y, fromLayer, toLayer)
-    recompute ground-connectivity   // this orphan now supports what rests on it
-```
+**Each pillar rises to its own mouth's height.** A descending part's two mouths are a layer apart by design, so sizing every pillar to the part's base leaves the raised end permanently one brick short.
 
-Ascending order plus the recompute means one scaffold can carry a whole stack — a 12-part tower floating in the air costs one column, not twelve.
+**Support is a per-column question, not a whole-part one.** A slide joined to an elevated run is "supported" by that joint, yet its far end still hangs over nothing four studs away. Asking once for the whole part reports it as fine and builds nothing at all.
 
-**Scaffolds are not parts.** Separate collection, not in `GridMap` occupancy, **not saved**, regenerated from scratch on every Play transition. They must never appear in the save file — otherwise a load/save round-trip bakes them into the player's creation and they accumulate.
-
-They *do* get real colliders: a marble must not fall through a support pillar.
-
-Visual: a distinct scaffolding look — thin translucent pillar, desaturated, subordinate to the player's own bricks so the build still reads as theirs. Deliberately *not* Duplo-styled; it should look like engineering scaffolding, so it's obvious what the player built and what the game added.
-
-**Build-mode preview**: render the same scaffolds ghosted while building, so the player sees what will be added before committing. Recomputed on mutation, cheap because it's incremental.
-
-**Toggles**: `auto-support on/off` (off → orphans simply float, physics-free, for players who want the magic-castle look) and `hide scaffolds` (visual only; colliders stay).
-
-**Edge cases**:
-- Column would land on a track part → it stops on top of that part. Slightly odd-looking, structurally fine, accepted.
-- Column would pass through the marble's path → unavoidable in general; the build-mode preview is the mitigation, since the player can see it and move the piece.
-- Orphan directly above another orphan → handled by the ascending-layer order.
+**Pillars must not claim cells the part needs.** Scaffolding is built before the part enters the map, so the map cannot yet see where the part will be. A pillar that takes one of its cells makes the part fail to place and the whole action is abandoned — silently, after the ghost has already shown green.
 
 ---
 
 ## 6. Track connectivity
 
-Each track `PartDefinition` declares ports:
+Channel mouths are a **second clutch system, equal in standing to studs**. Two parts whose channels meet — face to face, at the same height — hold each other up exactly as a stud holds an anti-stud. Without this, an elevated run counts as floating along its whole length no matter how solidly it is joined at both ends.
 
-```csharp
-struct TrackPort {
-    Vector2Int cell;      // local footprint cell
-    Facing     facing;    // N | E | S | W  (rotated with the part)
-    float      heightMm;  // channel floor height above the part's base
-}
-```
+### 6.1 Ports are derived, not authored
 
-On placement, `ConnectionSolver` checks each port against the opposing port of the neighbouring cell — matching facing, height within ~2 mm → connected edge.
+The geometry states them unambiguously, so hand-entering ~30 coordinates would only create something to drift from the mesh.
 
-`TrackGraph` (built incrementally, not rebuilt per placement) drives:
+A height map of the top surface is read along each boundary; a wall reads at the part's own height, a channel mouth far lower. The discriminator is that **a channel floor always sits 6.4 mm above a layer boundary** — 6.4, 25.6, 44.8. That single rule separates mouths from walls across all 20 parts, where "lower than the top" does not: `u_turn_slide` has walls at 19.2 and 20.0 mm against a 43 mm top.
 
-- **Visual feedback** — connected seams glow / unconnected port ends pulse. Biggest usability win in the whole build mode: kids see instantly why the ball will fall off.
-- Start→Goal reachability check ("your track reaches the goal!").
-- Optional guided-ball assist mode (see §7).
+Derivation reproduces every part correctly, including that both U-turns have all their mouths on **one side** — `u_turn` on west, `u_turn_slide` on south at 6.4 and 25.6 (a clean one-layer drop).
 
-Consider `com.unity.splines` to author centerlines for future long/curved parts; not required for the current 6 parts.
+### 6.2 Mouths are located by their centre line
 
----
+A channel is two studs wide, so its centre falls on the boundary *between* studs and cannot be named in whole studs at all. Ports are therefore stored in **half-studs (8 mm)**, which makes alignment an integer equality test rather than a tolerance.
+
+Recording a port per boundary *cell* instead — the first attempt — let two runs join while offset by one stud, because a single cell of one mouth still overlapped a single cell of the other. The joint reported as connected while the channels visibly stepped sideways.
+
+Contiguous cells at the same height group into one mouth. `u_turn` is the case that proves the grouping: its two west mouths must stay separate rather than merging across the wall between them.
+
+Half-stud positions need their own rotation. Cell rotation is `(x, y) → (y, w−1−x)`; the `−1` is there because it names a *cell*. Applying that to a centre line would shift every mouth half a stud off the boundary it sits on, so positions rotate as `(x, y) → (y, w−x)`.
+
+### 6.3 Placement has two axes
+
+Studs pull a part **down** onto what is beneath it; channels pull it **sideways to a specific height**. Resting height alone cannot express the second — continuing a run three layers up means placing over empty ground, which no downward rule would ever propose.
+
+`PlacementSolver` gathers candidate layers from both and scores them: a channel join outranks everything, then validity, then lowest wins so pieces settle rather than hover. Alignment must be a **whole** number of layers; a slide mouth meeting flat track half a layer off is a real mismatch, and rounding it would snap parts into a join that does not exist.
+
+The graph these joins form will drive connection glow and start-to-goal reachability. Not built yet.
 
 ## 7. Play mode
 

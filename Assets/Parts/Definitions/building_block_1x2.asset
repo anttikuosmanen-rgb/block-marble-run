@@ -19,7 +19,9 @@ MonoBehaviour:
   colliderPrefab: {fileID: 0}
   footprintSize: {x: 2, y: 1}
   footprintMask: 0101
+  layerMasks: 0101
   heightLayers: 1
+  pivotOffsetUnits: {x: 0.000000003799796, y: -9.685754e-10}
   topStuds: 0101
   bottomSockets: 0101
   rotation: 0

@@ -62,7 +62,10 @@ namespace BlockMarbleRun.EditorTools.Import
             for (int i = 0; i < ports.Length; i++)
             {
                 TrackPort p = ports[i];
-                p.cell = new Vector2Int(size.x - 1 - p.cell.x, p.cell.y);
+
+                // Mirroring across X reflects the centre line about the footprint's mid-plane, in the
+                // same half-stud units the port is stored in.
+                p.midlineHalfStuds = new Vector2Int(size.x * 2 - p.midlineHalfStuds.x, p.midlineHalfStuds.y);
                 p.facing = MirrorFacing(p.facing);
                 flipped[i] = p;
             }

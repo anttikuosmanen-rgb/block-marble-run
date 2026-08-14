@@ -31,19 +31,31 @@ namespace BlockMarbleRun.Parts
     }
 
     /// <summary>
-    /// Where a marble can enter or leave a part. Rotated with the part when placed.
+    /// Where a marble can enter or leave a part: one whole channel mouth, not one cell of it.
     /// See DESIGN.md section 6.
+    ///
+    /// The mouth is located by its centre line rather than by the cells it covers. A channel is two
+    /// studs wide, so its centre falls on the boundary <em>between</em> studs and cannot be named in
+    /// whole studs at all. Recording it per-cell also let two runs join while offset by one stud,
+    /// because a single cell of one mouth still lined up with a single cell of the other - the joint
+    /// looked connected while the channels were visibly misaligned.
+    ///
+    /// Half-studs (8 mm) give an exact integer for both cases, so alignment is an equality test
+    /// rather than a tolerance.
     /// </summary>
     [System.Serializable]
     public struct TrackPort
     {
-        [Tooltip("Which cell of the part's own footprint this port sits on.")]
-        public Vector2Int cell;
+        [Tooltip("Centre of the mouth on the part boundary, in half-studs from the footprint's min corner.")]
+        public Vector2Int midlineHalfStuds;
 
         public Facing facing;
 
         [Tooltip("Channel floor height above the part's base, in millimetres.")]
         public float heightMm;
+
+        [Tooltip("Mouth width in studs. Two for every part in the current set.")]
+        public int widthStuds;
     }
 
     /// <summary>
@@ -71,11 +83,17 @@ namespace BlockMarbleRun.Parts
         [Tooltip("Footprint bounding size in studs.")]
         public Vector2Int footprintSize = Vector2Int.one;
 
-        [Tooltip("Row-major occupancy over footprintSize; supports non-rectangular parts such as u_turn.")]
+        [Tooltip("Row-major occupancy over footprintSize, unioned across every layer.")]
         public bool[] footprintMask;
+
+        [Tooltip("Per-layer occupancy: heightLayers planes of footprintSize, layer-major.")]
+        public bool[] layerMasks;
 
         [Tooltip("Height in brick layers (1 layer = 19.2 mm).")]
         public int heightLayers = 1;
+
+        [Tooltip("Offset from the mesh's own origin to the centre of its footprint, in world units (XZ).")]
+        public Vector2 pivotOffsetUnits;
 
         [Tooltip("Row-major: which cells expose a stud on top. Empty means nothing can stack on this part.")]
         public bool[] topStuds;
@@ -109,6 +127,29 @@ namespace BlockMarbleRun.Parts
             // An unset mask means "solid rectangle", which is true for most parts and saves
             // authoring every cell by hand.
             return footprintMask == null || footprintMask.Length == 0 || footprintMask[index];
+        }
+
+        /// <summary>
+        /// Whether this part fills a cell on a particular layer.
+        ///
+        /// Parts are not always solid prisms. slide_curve_4x4's underside ramps from 18 mm down to 0,
+        /// so its raised end occupies only the upper layer and leaves real space beneath - space a
+        /// support pillar needs to stand in. Claiming every layer under the whole footprint both
+        /// blocks that pillar and makes the part collide with the scaffolding meant to hold it up.
+        /// </summary>
+        public bool OccupiesCell(int x, int y, int layer)
+        {
+            if (!OccupiesCell(x, y))
+                return false;
+
+            int layers = Mathf.Max(1, heightLayers);
+            if (layer < 0 || layer >= layers)
+                return false;
+
+            if (layerMasks == null || layerMasks.Length != footprintSize.x * footprintSize.y * layers)
+                return true; // no per-layer data: fall back to a solid prism
+
+            return layerMasks[layer * footprintSize.x * footprintSize.y + y * footprintSize.x + x];
         }
     }
 

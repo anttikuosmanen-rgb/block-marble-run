@@ -194,6 +194,32 @@ namespace BlockMarbleRun.Build
 
         public string SlotName = "My Creation";
 
+        [Tooltip("Brick used to prop up parts placed in mid-air. Falls back to the first block in the catalog.")]
+        public string pillarPartId = "building_block_2x2";
+
+        PartDefinition _pillar;
+
+        /// <summary>The brick auto-scaffolding is built from (DESIGN.md §5.1).</summary>
+        PartDefinition PillarDefinition
+        {
+            get
+            {
+                if (_pillar != null)
+                    return _pillar;
+
+                foreach (PartDefinition def in factory.Catalog.parts)
+                    if (def != null && def.id == pillarPartId)
+                        return _pillar = def;
+
+                // Any studded, single-layer part will hold weight; better a different brick than none.
+                foreach (PartDefinition def in factory.Catalog.parts)
+                    if (def != null && def.category == PartCategory.Block && def.heightLayers == 1)
+                        return _pillar = def;
+
+                return null;
+            }
+        }
+
         async Awaitable SaveAsync()
         {
             if (Busy || _saves == null)
@@ -313,20 +339,25 @@ namespace BlockMarbleRun.Build
 
             ghost.Show(candidate, result, factory.Catalog.ColorAt(_colorIndex));
 
-            if (mouse.leftButton.wasPressedThisFrame && result == PlacementResult.Valid)
-                _history.Execute(new PlacePartCommand(_map, candidate, Spawn));
+            // Unsupported is placeable, not refused: the piece gets pillars built under it. Only a
+            // genuine collision blocks placement.
+            if (mouse.leftButton.wasPressedThisFrame && result != PlacementResult.Blocked)
+            {
+                var command = new PlaceWithSupportsCommand(_map, candidate, PillarDefinition, Spawn);
+
+                if (_history.Execute(command) && command.SupportCount > 0)
+                    Status = $"Placed with {command.SupportCount} support brick(s)";
+            }
         }
 
         /// <summary>
         /// Works out where the held part would actually go, from the column under the cursor.
         ///
-        /// The height comes from the whole footprint, not from whatever the ray happened to hit. A
-        /// brick rests on the highest thing beneath <em>any</em> part of it, exactly as it would in
-        /// the hand - so a long piece laid across two towers with a gap between them sits on top of
-        /// both. Taking the height from the hit point alone made that impossible: bridging means
-        /// pointing at the gap, where the ray finds nothing but ground and drops the piece to the
-        /// floor. Whether the studs then line up is a separate question, answered by
-        /// <see cref="GridMap.IsSupported"/>.
+        /// The cursor supplies the column only; <see cref="PlacementSolver"/> chooses the height,
+        /// weighing resting on what is beneath against joining a neighbouring channel. Taking the
+        /// height from the ray's hit point instead made whole classes of build impossible - bridging
+        /// two towers means pointing at the gap, and continuing an elevated run means pointing at
+        /// empty air beside it.
         /// </summary>
         PlacedPart CandidateAt(GridCoord cursorCell)
         {
@@ -340,18 +371,7 @@ namespace BlockMarbleRun.Build
             int anchorX = cursorCell.x - (size.x - 1) / 2;
             int anchorY = cursorCell.y - (size.y - 1) / 2;
 
-            var probe = new PlacedPart(def, new GridCoord(anchorX, anchorY, 0), _rotation, _colorIndex);
-
-            int restLayer = 0;
-            foreach (GridCoord cell in probe.OccupiedCells())
-            {
-                if (cell.layer != 0)
-                    continue; // base layer only; the probe's upper layers say nothing about support
-
-                restLayer = Mathf.Max(restLayer, _map.ColumnRestLayer(cell.x, cell.y));
-            }
-
-            return new PlacedPart(def, new GridCoord(anchorX, anchorY, restLayer), _rotation, _colorIndex);
+            return PlacementSolver.Solve(_map, def, anchorX, anchorY, _rotation, _colorIndex);
         }
 
         void TryDelete(Vector2 screen)

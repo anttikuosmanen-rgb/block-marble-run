@@ -19,11 +19,21 @@ MonoBehaviour:
   colliderPrefab: {fileID: 0}
   footprintSize: {x: 5, y: 6}
   footprintMask: 010101010001010101010101010101010101010101010101010101010100
+  layerMasks: 010101010001010101010101010101010101010101010101010101010100
   heightLayers: 1
+  pivotOffsetUnits: {x: 0.24, y: -0.00000001527369}
   topStuds: 000000000000000000000101000000010100000000000000000000000000
   bottomSockets: 010101010001010101010101010101010101010101010101010101010100
   rotation: 0
-  ports: []
+  ports:
+  - midlineHalfStuds: {x: 0, y: 2}
+    facing: 3
+    heightMm: 6.4
+    widthStuds: 2
+  - midlineHalfStuds: {x: 0, y: 10}
+    facing: 3
+    heightMm: 6.4
+    widthStuds: 2
   centerline: []
   mirrorOf: 
   mirrorVerdict: 1
