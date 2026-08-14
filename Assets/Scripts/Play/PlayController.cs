@@ -79,6 +79,9 @@ namespace BlockMarbleRun.Play
         public static float ToMetresPerSecond(float unitsPerSecond) => unitsPerSecond * 0.1f;
         public int Alive => _marbles.Count;
 
+        /// <summary>The balls in play, newest last, for the camera to choose between.</summary>
+        public System.Collections.Generic.IReadOnlyList<Marble> Marbles => _marbles;
+
         void Awake() => _sphereMesh = BuildSphereMesh();
 
         public void SetActive(bool active)

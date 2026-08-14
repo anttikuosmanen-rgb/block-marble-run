@@ -176,6 +176,14 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             hud.joints = joints;
             hud.play = play;
             hud.mode = mode;
+
+            var director = systems.AddComponent<CameraDirector>();
+            director.rig = orbit;
+            director.play = play;
+            director.mode = mode;
+            director.pickCamera = cam;
+
+            hud.director = director;
             hud.palette = palette;
 
             foreach (Component component in systems.GetComponents<Component>())

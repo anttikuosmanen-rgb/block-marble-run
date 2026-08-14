@@ -17,6 +17,7 @@ namespace BlockMarbleRun.Build
         public BlockMarbleRun.Play.PlayController play;
         public BlockMarbleRun.Core.GameMode mode;
         public PartPalette palette;
+        public BlockMarbleRun.CameraRig.CameraDirector director;
 
         GUIStyle _style;
 
@@ -235,7 +236,21 @@ namespace BlockMarbleRun.Build
 
             GUILayout.Space(6);
             GUILayout.Label("Space release from starts    Left click drop a ball    M change ball", _style);
+            if (director != null)
+            {
+                string watching = director.Subject != null
+                    ? director.Subject.Definition?.displayName ?? "ball"
+                    : "nothing";
+
+                GUILayout.Label($"View: {director.View}   watching {watching}", _style);
+            }
+
             GUILayout.Label("R reset    Tab back to building    P physics panel    B floor", _style);
+            GUILayout.Label("C view: orbit / follow / chase / ride    N next ball    right click a ball to watch it",
+                            _style);
+
+            if (director != null && director.View == BlockMarbleRun.CameraRig.OrbitCamera.View.Ride)
+                GUILayout.Label("Riding: scroll for distance behind    right drag for height and angle", _style);
         }
 
         void DrawSelectionBox()
