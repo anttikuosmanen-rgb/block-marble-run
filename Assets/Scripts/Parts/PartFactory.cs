@@ -12,6 +12,10 @@ namespace BlockMarbleRun.Parts
         public Material partMaterial;
         public PartCatalog catalog;
 
+        [Tooltip("Tints for designated start and goal pieces, so a role reads at a glance.")]
+        public Material startMaterial;
+        public Material goalMaterial;
+
         static MaterialPropertyBlock _block;
 
         /// <summary>
@@ -44,6 +48,18 @@ namespace BlockMarbleRun.Parts
                 };
                 _paletteMaterials[i].SetColor("_BaseColor", catalog.palette[i]);
             }
+        }
+
+        /// <summary>Role tint wins over the brick's own colour, so a designated piece is unmistakable.</summary>
+        public Material MaterialFor(PlacedPart part)
+        {
+            if (part.Role == PartRole.Start && startMaterial != null)
+                return startMaterial;
+
+            if (part.Role == PartRole.Goal && goalMaterial != null)
+                return goalMaterial;
+
+            return MaterialFor(part.ColorIndex);
         }
 
         public Material MaterialFor(byte colorIndex)
@@ -79,7 +95,7 @@ namespace BlockMarbleRun.Parts
             }
             else
             {
-                renderer.sharedMaterial = MaterialFor(part.ColorIndex);
+                renderer.sharedMaterial = MaterialFor(part);
             }
 
             if (withCollider)

@@ -30,6 +30,12 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             Material ghostMaterial = EnsureMaterial("Ghost", "Universal Render Pipeline/Lit", opaque: false);
             Material groundMaterial = EnsureMaterial("Ground", "Block Marble Run/Infinite Stud Grid", opaque: true);
             Material highlightMaterial = EnsureMaterial("Highlight", "Universal Render Pipeline/Lit", opaque: true);
+            Material markerMaterial = EnsureMaterial("PortMarker", "Universal Render Pipeline/Unlit", opaque: true);
+
+            Material startMaterial = EnsureMaterial("RoleStart", "Universal Render Pipeline/Lit", opaque: true);
+            startMaterial.SetColor("_BaseColor", new Color(0.25f, 0.85f, 0.35f));
+            Material goalMaterial = EnsureMaterial("RoleGoal", "Universal Render Pipeline/Lit", opaque: true);
+            goalMaterial.SetColor("_BaseColor", new Color(0.98f, 0.78f, 0.15f));
             highlightMaterial.SetColor("_BaseColor", new Color(0.35f, 0.85f, 1f));
             highlightMaterial.SetColor("_EmissionColor", new Color(0.10f, 0.35f, 0.5f));
             highlightMaterial.EnableKeyword("_EMISSION");
@@ -53,6 +59,8 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             var factory = systems.AddComponent<PartFactory>();
             factory.partMaterial = partMaterial;
             factory.catalog = catalog;
+            factory.startMaterial = startMaterial;
+            factory.goalMaterial = goalMaterial;
 
             var raycaster = systems.AddComponent<BuildRaycaster>();
             raycaster.buildCamera = cam;
@@ -73,9 +81,14 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             stress.factory = factory;
             stress.partRoot = partRoot;
 
+            var markers = systems.AddComponent<BlockMarbleRun.Track.OpenPortMarkers>();
+            markers.controller = controller;
+            markers.markerMaterial = markerMaterial;
+
             var hud = systems.AddComponent<BuildHud>();
             hud.controller = controller;
             hud.stressTest = stress;
+            hud.markers = markers;
 
             foreach (Component component in systems.GetComponents<Component>())
                 EditorUtility.SetDirty(component);
@@ -85,6 +98,7 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             Verify(raycaster.buildCamera, "BuildRaycaster.buildCamera");
             Verify(ghost.ghostMaterial, "GhostPreview.ghostMaterial");
             Verify(controller.highlightMaterial, "BuildController.highlightMaterial");
+            Verify(markers.markerMaterial, "OpenPortMarkers.markerMaterial");
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);

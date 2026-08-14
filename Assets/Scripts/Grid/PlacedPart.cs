@@ -21,12 +21,27 @@ namespace BlockMarbleRun.Grid
 
         public GameObject Instance;
 
-        public PlacedPart(PartDefinition definition, GridCoord origin, int rotation, byte colorIndex)
+        /// <summary>
+        /// Mutable, unlike the rest of this type: a role is assigned after placement, by pointing at
+        /// a piece already in the build rather than by choosing a different part to place.
+        /// </summary>
+        public PartRole Role;
+
+        /// <summary>
+        /// Only a dead end can take a role. A single mouth is what makes it unambiguous - a marble
+        /// released into a through-piece has two ways to go, and "arrived" at one means only that it
+        /// passed over.
+        /// </summary>
+        public bool CanTakeRole => Definition.ports is { Length: 1 };
+
+        public PlacedPart(PartDefinition definition, GridCoord origin, int rotation, byte colorIndex,
+                          PartRole role = PartRole.None)
         {
             Definition = definition;
             Origin = origin;
             Rotation = ((rotation % 4) + 4) % 4;
             ColorIndex = colorIndex;
+            Role = role;
         }
 
         /// <summary>Footprint bounding size after rotation. Odd quarter turns swap the axes.</summary>
@@ -155,6 +170,21 @@ namespace BlockMarbleRun.Grid
                     yield return alongX ? new Vector2Int(along, inside) : new Vector2Int(inside, along);
                 }
             }
+
+            /// <summary>Where the mouth sits in the world, for drawing a marker on it.</summary>
+            public Vector3 WorldPosition => new Vector3(
+                MidlineHalfStuds.x * GridCoord.StudUnits * 0.5f,
+                HeightUnits,
+                MidlineHalfStuds.y * GridCoord.StudUnits * 0.5f);
+
+            /// <summary>Outward direction of the mouth, for orienting that marker.</summary>
+            public Vector3 OutwardDirection => Facing switch
+            {
+                Facing.North => Vector3.forward,
+                Facing.East => Vector3.right,
+                Facing.South => Vector3.back,
+                _ => Vector3.left,
+            };
 
             /// <summary>Absolute layer the channel floor sits in, for sizing a pillar under it.</summary>
             public int FloorLayer => Mathf.FloorToInt(HeightUnits / GridCoord.LayerUnits + 0.001f);

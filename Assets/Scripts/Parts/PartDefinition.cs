@@ -15,6 +15,14 @@ namespace BlockMarbleRun.Parts
         Goal,
     }
 
+    /// <summary>What a placed part does in play mode, beyond carrying a marble.</summary>
+    public enum PartRole
+    {
+        None,
+        Start,
+        Goal,
+    }
+
     public enum RotationMode
     {
         Free90,

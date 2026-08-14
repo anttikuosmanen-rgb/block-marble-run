@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using BlockMarbleRun.Grid;
@@ -34,6 +35,8 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestUnknownPartIsSkippedNotFatal();
             TestVersionIsStamped();
             TestNewerVersionStillLoads();
+            TestRoleSurvivesRoundTrip();
+            TestOlderSaveWithoutRoleLoads();
 
             string summary = $"[SaveSelfTest] {_passed} passed, {_failed} failed.\n{_log}";
             if (_failed > 0) Debug.LogError(summary); else Debug.Log(summary);
@@ -115,6 +118,48 @@ namespace BlockMarbleRun.EditorTools.Tests
 
             SaveModel parsed = SaveModel.FromJson(model.ToJson());
             Check("loads a newer save rather than refusing", parsed != null && parsed.parts.Length > 0);
+        }
+
+        static void TestRoleSurvivesRoundTrip()
+        {
+            var catalog = ScriptableObject.CreateInstance<PartCatalog>();
+            PartDefinition terminal = MakeDef("terminal_2x2", new Vector2Int(2, 2), 1, studs: false);
+            terminal.ports = new[] { new TrackPort { facing = Facing.West, heightMm = 6.4f, widthStuds = 2 } };
+            catalog.parts.Add(terminal);
+
+            var map = new GridMap();
+            map.Add(new PlacedPart(terminal, new GridCoord(0, 0, 0), 0, 0, PartRole.Start));
+            map.Add(new PlacedPart(terminal, new GridCoord(4, 0, 0), 0, 0, PartRole.Goal));
+
+            SaveModel model = SaveModel.FromJson(SaveService.Capture(map, "roles").ToJson());
+
+            var restored = new GridMap();
+            new SaveService(new FileSaveStore(), catalog).Apply(model, restored, _ => null);
+
+            var roles = new List<PartRole>();
+            foreach (PlacedPart p in restored.Parts)
+                roles.Add(p.Role);
+
+            Check("start survives the round trip", roles.Contains(PartRole.Start));
+            Check("goal survives the round trip", roles.Contains(PartRole.Goal));
+        }
+
+        /// <summary>
+        /// The role field was added without a version bump, so a save written before it must still
+        /// load - reading as "no role", which is what it meant.
+        /// </summary>
+        static void TestOlderSaveWithoutRoleLoads()
+        {
+            const string legacy =
+                "{\"version\":1,\"name\":\"old\",\"savedAtUnixSeconds\":1," +
+                "\"parts\":[{\"id\":\"block_2x2\",\"x\":0,\"y\":0,\"layer\":0,\"rot\":0,\"color\":2}]}";
+
+            SaveModel model = SaveModel.FromJson(legacy);
+
+            Check("a save without roles still parses", model != null && model.parts.Length == 1);
+            Check("its parts default to no role", model != null && model.parts[0].role == 0,
+                $"got {model?.parts[0].role}");
+            Check("its other fields are intact", model != null && model.parts[0].color == 2);
         }
 
         // --- helpers -------------------------------------------------------------------------

@@ -16,6 +16,9 @@ namespace BlockMarbleRun.Persistence
         public int layer;
         public int rot;
         public int color;
+
+        /// <summary>0 none, 1 start, 2 goal. Added after v1; absent in older saves, where it reads 0.</summary>
+        public int role;
     }
 
     /// <summary>
@@ -66,6 +69,10 @@ namespace BlockMarbleRun.Persistence
                     $"({SaveModel.CurrentVersion}). Loading anyway; unknown fields are ignored.");
                 return model;
             }
+
+            // No steps yet. The role field was added without a version bump on purpose: JsonUtility
+            // leaves an absent field at its default, and "no role" is exactly what an older save
+            // means. A bump is for changes that cannot be read correctly without one.
 
             // while (model.version < SaveModel.CurrentVersion) { ... step by step ... }
 

@@ -39,6 +39,7 @@ namespace BlockMarbleRun.Persistence
                     layer = part.Origin.layer,
                     rot = part.Rotation,
                     color = part.ColorIndex,
+                    role = (int)part.Role,
                 });
             }
 
@@ -90,7 +91,8 @@ namespace BlockMarbleRun.Persistence
                     def,
                     new GridCoord(saved.x, saved.y, saved.layer),
                     saved.rot,
-                    (byte)saved.color);
+                    (byte)saved.color,
+                    (PartRole)saved.role);
 
                 if (map.Add(part))
                 {

@@ -12,6 +12,7 @@ namespace BlockMarbleRun.Build
     {
         public BuildController controller;
         public StressTest stressTest;
+        public BlockMarbleRun.Track.OpenPortMarkers markers;
 
         GUIStyle _style;
 
@@ -72,11 +73,14 @@ namespace BlockMarbleRun.Build
                 $"Catalog: {controller.CatalogPartCount}   Selected: {controller.Selection?.Count ?? 0}   " +
                 $"Slot: {controller.SlotName}", _style);
 
+            if (markers != null)
+                GUILayout.Label($"Open channel ends: {markers.OpenCount}", _style);
+
             if (!string.IsNullOrEmpty(controller.Status))
                 GUILayout.Label(controller.Status, _style);
 
             GUILayout.Space(6);
-            GUILayout.Label("Q / E part    R rotate    C colour", _style);
+            GUILayout.Label("Q / E part    R rotate    C colour    X mark start/goal", _style);
             GUILayout.Label("Left click place    Alt + click delete    Shift + drag select    Del delete selection", _style);
             GUILayout.Label("S save    L load", _style);
             GUILayout.Label("Right drag orbit    Middle drag pan    Scroll zoom", _style);

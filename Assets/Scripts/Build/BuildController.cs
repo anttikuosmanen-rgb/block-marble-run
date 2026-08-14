@@ -176,6 +176,53 @@ namespace BlockMarbleRun.Build
 
             if (keyboard.lKey.wasPressedThisFrame)
                 _ = LoadAsync();
+
+            if (keyboard.xKey.wasPressedThisFrame)
+                CycleRoleUnderCursor();
+        }
+
+        /// <summary>
+        /// Cycles the pointed-at dead end through plain, start and goal.
+        ///
+        /// Applied to a piece already in the build rather than chosen before placing: a role is a
+        /// property of one particular end of one particular run, and picking it from a palette would
+        /// mean carrying two nearly identical parts around.
+        /// </summary>
+        void CycleRoleUnderCursor()
+        {
+            Mouse mouse = Mouse.current;
+            if (mouse == null)
+                return;
+
+            BuildHit hit = raycaster.RaycastPick(mouse.position.ReadValue());
+            if (!hit.Valid || hit.Collider == null)
+                return;
+
+            var marker = hit.Collider.GetComponentInParent<PlacedPartMarker>();
+            if (marker == null)
+                return;
+
+            if (!marker.Part.CanTakeRole)
+            {
+                Status = "Only a dead-end piece can be a start or goal";
+                return;
+            }
+
+            var next = (PartRole)(((int)marker.Part.Role + 1) % 3);
+
+            if (_history.Execute(new SetRoleCommand(marker.Part, next, RefreshMaterial)))
+                Status = next == PartRole.None ? "Role cleared" : $"Marked as {next}";
+        }
+
+        /// <summary>Re-applies a part's material after its role changes, without rebuilding the object.</summary>
+        void RefreshMaterial(PlacedPart part)
+        {
+            if (part.Instance == null)
+                return;
+
+            var renderer = part.Instance.GetComponent<MeshRenderer>();
+            if (renderer != null)
+                renderer.sharedMaterial = factory.MaterialFor(part);
         }
 
         void DeleteSelection()

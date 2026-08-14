@@ -24,6 +24,12 @@ namespace BlockMarbleRun.Grid
         bool _boundsValid;
         BoundsInt _bounds;
 
+        /// <summary>
+        /// Bumped on every change. Lets views refresh when the build actually changed rather than
+        /// rebuilding themselves every frame or wiring an event through each edit path.
+        /// </summary>
+        public int Version { get; private set; }
+
         public IReadOnlyCollection<PlacedPart> Parts => _parts;
         public int CellCount => _cells.Count;
 
@@ -184,6 +190,7 @@ namespace BlockMarbleRun.Grid
                 _cells[cell] = part;
 
             _parts.Add(part);
+            Version++;
             _maxLayer = Mathf.Max(_maxLayer, part.TopLayer);
             _boundsValid = false;
             return true;
@@ -198,6 +205,7 @@ namespace BlockMarbleRun.Grid
                 if (_cells.TryGetValue(cell, out PlacedPart occupant) && occupant == part)
                     _cells.Remove(cell);
 
+            Version++;
             _boundsValid = false;
             return true;
         }
@@ -206,6 +214,7 @@ namespace BlockMarbleRun.Grid
         {
             _cells.Clear();
             _parts.Clear();
+            Version++;
             _maxLayer = 0;
             _boundsValid = false;
         }

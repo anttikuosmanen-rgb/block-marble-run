@@ -187,6 +187,43 @@ namespace BlockMarbleRun.Build
         }
     }
 
+    /// <summary>
+    /// Cycles a piece's role. Undoable like any other edit, so designating a goal by mistake costs
+    /// one keypress to reverse rather than deleting and rebuilding the piece.
+    /// </summary>
+    public sealed class SetRoleCommand : IEditCommand
+    {
+        readonly PlacedPart _part;
+        readonly Parts.PartRole _role;
+        readonly System.Action<PlacedPart> _refresh;
+
+        Parts.PartRole _previous;
+
+        public SetRoleCommand(PlacedPart part, Parts.PartRole role, System.Action<PlacedPart> refresh)
+        {
+            _part = part;
+            _role = role;
+            _refresh = refresh;
+        }
+
+        public bool Do()
+        {
+            if (!_part.CanTakeRole || _part.Role == _role)
+                return false;
+
+            _previous = _part.Role;
+            _part.Role = _role;
+            _refresh(_part);
+            return true;
+        }
+
+        public void Undo()
+        {
+            _part.Role = _previous;
+            _refresh(_part);
+        }
+    }
+
     /// <summary>Adds a part to the grid and builds its scene object.</summary>
     public sealed class PlacePartCommand : IEditCommand
     {

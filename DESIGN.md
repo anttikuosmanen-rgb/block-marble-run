@@ -417,7 +417,19 @@ Studs pull a part **down** onto what is beneath it; channels pull it **sideways 
 
 `PlacementSolver` gathers candidate layers from both and scores them: a channel join outranks everything, then validity, then lowest wins so pieces settle rather than hover. Alignment must be a **whole** number of layers; a slide mouth meeting flat track half a layer off is a real mismatch, and rounding it would snap parts into a join that does not exist.
 
-The graph these joins form will drive connection glow and start-to-goal reachability. Not built yet.
+### 6.4 Feedback shows the leaks, not the joins
+
+The plan called for glowing every connected seam. Shipped the inverse: a marker on every mouth that leads **nowhere**.
+
+Glowing the joins lights up the entire run and draws the eye to what is already working. The open ends are the actionable information — they are exactly where a marble will leave the track — and absence of a marker then means "connected", which needs no legend. The HUD carries the count.
+
+### 6.5 Start and goal are designations, not parts
+
+There is no STL for either, and inventing one would add art plus a placement path that bypasses the grid clutch rules. Instead any **dead end** — a part with exactly one mouth, which today means `terminal_2x2` — can be cycled through plain → start → goal by pointing at it.
+
+A single mouth is what makes the designation unambiguous: a marble released into a through-piece has two ways to go, and "arrived" at one means only that it passed over. The role is tinted (green start, gold goal), undoable like any other edit, and saved with the creation.
+
+Start-to-goal reachability over the join graph is still unbuilt; it needs play mode to be worth anything.
 
 ## 7. Play mode
 
@@ -540,7 +552,7 @@ Ship both from one CI job (`unity-builder` GitHub Action): `webgl-selfhost`, `we
 | M0 | Project + import pipeline | Unity 6.5 URP project, `git init`, STL importer working, all 20 parts render at correct scale with smooth normals, chirality analysis + mirror generation reviewed once. **CI producing WebGL + macOS builds, Pages deploy live, on day one** |
 | M1 | Grid & placement | Orbit camera, infinite grid ground, ghost preview, place/delete blocks with snapping, multi-layer parts, support rules. 2000-part stress scene profiled on WebGL — decides GameObject vs. instanced rendering |
 | M2 | Editing | Rotation, colors, box select, undo/redo, async save/load via `ISaveStore` on both targets, thumbnails |
-| M3 | Track + supports | Ports, `TrackGraph`, connection visual feedback, start & goal parts, auto-scaffolding (§5.1) with build-mode preview |
+| M3 | Track + supports | **Done.** Derived ports, channel-to-channel clutch, open-mouth feedback, start & goal designation, build-time auto-scaffolding (§5.1) |
 | M4 | Play | Mode switch, marble physics tuned per §2, soft assist (§13) with centerlines on the track parts, release/reset, out-of-bounds, goal detection, timer. **Physics profiled on WebGL at target marble count** |
 | M5 | Feel | UI Toolkit palette, marble-help setting, assist tuning from playtest, sound (rolling loop pitched by speed, clacks on impact — gesture-gated audio init), particles, camera follow, optional decorative baseplate |
 | M6 | Content | Challenge/level mode, sandbox scoring, more STL parts, share codes + file import/export |

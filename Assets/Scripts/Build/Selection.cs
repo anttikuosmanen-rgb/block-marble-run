@@ -121,7 +121,7 @@ namespace BlockMarbleRun.Build
 
             renderer.sharedMaterial = highlighted
                 ? _highlightMaterial
-                : _factory.MaterialFor(part.ColorIndex);
+                : _factory.MaterialFor(part);
         }
 
         /// <summary>Re-applies highlighting after instances are rebuilt, such as after an undo.</summary>
