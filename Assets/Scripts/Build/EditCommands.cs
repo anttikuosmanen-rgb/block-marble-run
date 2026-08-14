@@ -272,6 +272,162 @@ namespace BlockMarbleRun.Build
         }
     }
 
+    /// <summary>
+    /// Moves a whole assembly up or down by whole layers, as one history entry.
+    ///
+    /// The parts themselves are immutable in position, so this swaps the originals for shifted
+    /// copies. Undo swaps them back, which is why both sets are kept rather than recomputed - a
+    /// recomputed original would be a different object and anything still referring to the old one,
+    /// such as the selection, would be pointing at a piece that no longer exists.
+    /// </summary>
+    public sealed class MoveAssemblyCommand : IEditCommand
+    {
+        readonly GridMap _map;
+        readonly List<PlacedPart> _before;
+        readonly List<PlacedPart> _after;
+        readonly Parts.PartDefinition _pillar;
+        readonly System.Func<PlacedPart, GameObject> _spawn;
+
+        List<PlacedPart> _supports = new();
+
+        public MoveAssemblyCommand(GridMap map, List<PlacedPart> before, List<PlacedPart> after,
+                                   Parts.PartDefinition pillar, System.Func<PlacedPart, GameObject> spawn)
+        {
+            _map = map;
+            _before = before;
+            _after = after;
+            _pillar = pillar;
+            _spawn = spawn;
+        }
+
+        public int SupportCount => _supports.Count;
+
+        /// <summary>
+        /// Hold the scaffolding back until the caller says so.
+        ///
+        /// Growing the build to fit a piece underneath makes room and then fills it: the pillars that
+        /// prop the raised run stand in exactly the space the descending piece was heading for, so the
+        /// placement is refused and the whole action rolls back without a word. The piece goes in
+        /// first, and the supports are built around it.
+        /// </summary>
+        public bool DeferSupports { get; set; }
+
+        public bool Do() => Swap(_before, _after, buildSupports: !DeferSupports);
+
+        /// <summary>Runs the held-back scaffolding pass, once the rest of the action is in place.</summary>
+        public void BuildDeferredSupports() => Scaffold(_after);
+
+        public void Undo()
+        {
+            foreach (PlacedPart support in _supports)
+            {
+                _map.Remove(support);
+
+                if (support.Instance != null)
+                    Object.Destroy(support.Instance);
+
+                support.Instance = null;
+            }
+
+            _supports.Clear();
+            Swap(_after, _before, buildSupports: false);
+        }
+
+        bool Swap(List<PlacedPart> from, List<PlacedPart> to, bool buildSupports)
+        {
+            foreach (PlacedPart part in from)
+            {
+                _map.Remove(part);
+
+                if (part.Instance != null)
+                    Object.Destroy(part.Instance);
+
+                part.Instance = null;
+            }
+
+            foreach (PlacedPart part in to)
+                if (_map.Add(part))
+                    part.Instance = _spawn(part);
+
+            if (buildSupports)
+                Scaffold(to);
+
+            return true;
+        }
+
+        void Scaffold(List<PlacedPart> parts)
+        {
+            if (_pillar == null)
+                return;
+
+            // Raising a run leaves air under it; the same rule that props a newly placed piece applies.
+            foreach (PlacedPart part in parts)
+            {
+                if (!part.HasPorts)
+                    continue;
+
+                foreach (PlacedPart support in ScaffoldBuilder.BuildSupports(_map, part, _pillar))
+                {
+                    support.Instance = _spawn(support);
+                    _supports.Add(support);
+                }
+            }
+
+            // And the bricks that were doing the holding are now hanging too.
+            foreach (PlacedPart support in ScaffoldBuilder.ExtendLiftedColumns(_map, parts, _pillar))
+            {
+                support.Instance = _spawn(support);
+                _supports.Add(support);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Lifts the whole build and places a piece in the room that makes, as one action.
+    ///
+    /// Growing and placing were two clicks before, which read as the build lurching upward for no
+    /// stated reason and then needing the same placement made again. They are one intention and so
+    /// they are one history entry: undo puts the build back down and takes the piece away together.
+    /// </summary>
+    public sealed class GrowAndPlaceCommand : IEditCommand
+    {
+        readonly MoveAssemblyCommand _grow;
+        readonly PlaceWithSupportsCommand _place;
+
+        public GrowAndPlaceCommand(MoveAssemblyCommand grow, PlaceWithSupportsCommand place)
+        {
+            _grow = grow;
+            _place = place;
+
+            // The order matters, so it is set here rather than left to the caller: lift, place, then
+            // prop. Propping the lifted run first fills the very space the piece is descending into.
+            _grow.DeferSupports = true;
+        }
+
+        public bool Do()
+        {
+            if (!_grow.Do())
+                return false;
+
+            if (_place.Do())
+            {
+                _grow.BuildDeferredSupports();
+                return true;
+            }
+
+            // The room was made and the piece still would not go: put the build back rather than
+            // leaving it raised around a placement that never happened.
+            _grow.Undo();
+            return false;
+        }
+
+        public void Undo()
+        {
+            _place.Undo();
+            _grow.Undo();
+        }
+    }
+
     /// <summary>Adds a part to the grid and builds its scene object.</summary>
     public sealed class PlacePartCommand : IEditCommand
     {

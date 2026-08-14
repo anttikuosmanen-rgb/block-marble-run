@@ -53,7 +53,7 @@ namespace BlockMarbleRun.Grid
         /// partner's, which fixes the position and the layer.
         /// </summary>
         public static List<PlacedPart> MatingsWith(GridMap map, PartDefinition def, byte colorIndex,
-                                                   PlacedPart.WorldPort target)
+                                                   PlacedPart.WorldPort target, bool allowBelowGround = false)
         {
             var matings = new List<PlacedPart>();
 
@@ -83,11 +83,22 @@ namespace BlockMarbleRun.Grid
                     float layerFloat = (target.HeightUnits - port.heightMm * PlacedPart.MmToUnits) / GridCoord.LayerUnits;
                     int layer = Mathf.RoundToInt(layerFloat);
 
-                    if (Mathf.Abs(layerFloat - layer) * GridCoord.LayerUnits > HeightTolerance || layer < 0)
+                    if (Mathf.Abs(layerFloat - layer) * GridCoord.LayerUnits > HeightTolerance)
                         continue;
 
                     var candidate = new PlacedPart(def,
                         new GridCoord(originHalfX / 2, originHalfY / 2, layer), rotation, colorIndex);
+
+                    if (layer < 0)
+                    {
+                        // Below the ground is not a placement, but it is a legitimate thing to want:
+                        // the join is real and the room can be made by lifting the rest of the build.
+                        // Offered so the ghost can show it, and refused by CanPlace until it is raised.
+                        if (allowBelowGround)
+                            matings.Add(candidate);
+
+                        continue;
+                    }
 
                     if (map.CanPlace(candidate) != PlacementResult.Blocked)
                         matings.Add(candidate);

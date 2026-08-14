@@ -87,6 +87,17 @@ namespace BlockMarbleRun.Parts
             part.GetTransform(out Vector3 position, out Quaternion rotation);
             go.transform.SetPositionAndRotation(position, rotation);
 
+            // Colliders first, before the MeshFilter exists.
+            //
+            // A MeshCollider added to an object that already has a MeshFilter adopts that filter's
+            // mesh the moment it is created - before any sharedMesh of ours is assigned. For a brick
+            // that means PhysX immediately tries to cook the render mesh, which is deliberately
+            // GPU-only, and logs "CollisionMeshData couldn't be created" naming a mesh rather than a
+            // part. The collider we then assign is correct, so nothing was ever broken - it simply
+            // complained once per brick placed, which made it look like a fault in the scaffolding.
+            if (withCollider)
+                AddColliders(go, part);
+
             go.AddComponent<MeshFilter>().sharedMesh = part.Definition.mesh;
 
             var renderer = go.AddComponent<MeshRenderer>();
@@ -100,9 +111,6 @@ namespace BlockMarbleRun.Parts
             {
                 renderer.sharedMaterial = MaterialFor(part);
             }
-
-            if (withCollider)
-                AddColliders(go, part);
 
             part.Instance = go;
             return go;
@@ -136,13 +144,26 @@ namespace BlockMarbleRun.Parts
 
             // A tunnelled part needs its real geometry too: a bridge modelled as a solid box
             // walls in the very ball it is meant to arch over.
+            //
+            // The readability check is not belt and braces: only channel and tunnel meshes keep a CPU
+            // copy, and handing a collider one without it fails at runtime with an error naming a mesh
+            // rather than a part. If this ever trips, the part's readable flag and its ports disagree,
+            // and the generated collider below is a working answer either way.
             if ((def.ports is { Length: > 0 } || def.hasTunnel) && def.mesh != null)
             {
-                var channel = go.AddComponent<MeshCollider>();
-                channel.sharedMesh = def.mesh;
-                channel.convex = false; // static, so concave is fine and the trough survives
-                channel.sharedMaterial = surfacePhysics;
-                return;
+                if (!def.mesh.isReadable)
+                {
+                    Debug.LogWarning($"[Parts] '{def.id}' wants a mesh collider but its mesh is not " +
+                                     "readable; re-run Generate Part Definitions. Falling back.", def);
+                }
+                else
+                {
+                    var channel = go.AddComponent<MeshCollider>();
+                    channel.sharedMesh = def.mesh;
+                    channel.convex = false; // static, so concave is fine and the trough survives
+                    channel.sharedMaterial = surfacePhysics;
+                    return;
+                }
             }
 
             if (def.topStuds is { Length: > 0 })

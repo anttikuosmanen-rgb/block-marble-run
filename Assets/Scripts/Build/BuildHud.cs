@@ -49,8 +49,36 @@ namespace BlockMarbleRun.Build
                 _worstMs = 0f;
             }
 
-            if (Keyboard.current != null && Keyboard.current.kKey.wasPressedThisFrame)
+            if (Keyboard.current == null)
+                return;
+
+            if (Keyboard.current.kKey.wasPressedThisFrame)
                 _worstMs = 0f;
+
+            if (Keyboard.current.jKey.wasPressedThisFrame)
+            {
+                BlockMarbleRun.Grid.ScaffoldBuilder.Verbose = !BlockMarbleRun.Grid.ScaffoldBuilder.Verbose;
+                BlockMarbleRun.Grid.ScaffoldBuilder.Report = "";
+            }
+        }
+
+        /// <summary>
+        /// The scaffolder's last decision, in its own panel on the right.
+        ///
+        /// Not appended to the help text: that column is already the full height of the window, so a
+        /// multi-line report at the end of it is the first thing to fall off the bottom.
+        /// </summary>
+        void DrawScaffoldLog(float top)
+        {
+            if (!BlockMarbleRun.Grid.ScaffoldBuilder.Verbose)
+                return;
+
+            string report = BlockMarbleRun.Grid.ScaffoldBuilder.Report;
+
+            GUILayout.BeginArea(new Rect(Screen.width - 392f, top, 380f, 320f));
+            GUILayout.Label("[Scaffold] J to turn off", _style);
+            GUILayout.Label(string.IsNullOrEmpty(report) ? "place a channel piece..." : report, _style);
+            GUILayout.EndArea();
         }
 
         void OnGUI()
@@ -68,7 +96,11 @@ namespace BlockMarbleRun.Build
 
             // Start below the palette bar, which draws itself first and knows its own height.
             float top = 12f + (palette != null ? palette.Height : 0f);
-            GUILayout.BeginArea(new Rect(12, top, 640, 300));
+
+            // Down to the bottom of the window rather than a fixed 300. An area clips its contents,
+            // and the help text had already grown past that height - anything added to the end was
+            // drawn outside the box and simply never appeared.
+            GUILayout.BeginArea(new Rect(12, top, 640, Mathf.Max(300f, Screen.height - top - 12f)));
 
             if (playing)
             {
@@ -109,15 +141,27 @@ namespace BlockMarbleRun.Build
                     ? $"R cycles joins ({controller.VariantIndex + 1}/{controller.VariantCount})    C colour    X mark start/goal"
                     : "Q / E part    R rotate    C colour    X mark start/goal", _style);
 
+            if (controller.GrowthLayers > 0)
+                GUILayout.Label($"Click to lift the build {controller.GrowthLayers} layer(s) and place here", _style);
+
             if (controller.Precise)
                 GUILayout.Label("PRECISE - sliding stud by stud, R still turns / cycles joins", _style);
             GUILayout.Label("Left click place    Shift precise    V grab (click picks, drag selects)    Del remove", _style);
-            GUILayout.Label("S save    L load", _style);
+            GUILayout.Label("S save    L load    + / - raise or lower a structure", _style);
             GUILayout.Label("Right drag orbit    Middle drag pan    Scroll zoom", _style);
             GUILayout.Label("F frame build    Home origin    Cmd+Z undo    Shift+Cmd+Z redo", _style);
             GUILayout.Label("Tab play mode", _style);
             GUILayout.Label("Stress: T palette-mat   Y property-block(old)   U palette+sparse   G clear   K reset worst", _style);
+
+            // Deliberately in the building HUD and not the physics panel. Scaffolding is decided when
+            // a piece is placed, which only happens here - the panel could show the text but never
+            // while the thing it describes was happening.
+            GUILayout.Label("J scaffold log" + (BlockMarbleRun.Grid.ScaffoldBuilder.Verbose ? " (on)" : ""),
+                            _style);
+
             GUILayout.EndArea();
+
+            DrawScaffoldLog(top);
 
             DrawSelectionBox();
         }

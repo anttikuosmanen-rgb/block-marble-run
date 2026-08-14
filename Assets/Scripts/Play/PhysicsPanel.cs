@@ -127,6 +127,7 @@ namespace BlockMarbleRun.Play
                 GUILayout.Label("   none assigned - parts use Unity's default 0.6 / 0.6 / 0", _label);
             }
 
+
             if (welder != null)
             {
                 GUILayout.Space(6);

@@ -151,6 +151,22 @@ namespace BlockMarbleRun.Track
                 if (mesh == null || part.Instance == null)
                     continue;
 
+                // Combining reads the source geometry, so a mesh without a CPU copy cannot take part.
+                // Leaving it out would silently drop a piece of the run's collision, so the whole weld
+                // is abandoned instead and every part keeps its own collider.
+                if (!mesh.isReadable)
+                {
+                    Debug.LogWarning($"[Weld] '{part.Definition.id}' has no readable mesh; leaving this " +
+                                     "run unwelded.");
+
+                    foreach (Collider collider in _suppressed)
+                        if (collider != null)
+                            collider.enabled = true;
+
+                    _suppressed.Clear();
+                    return;
+                }
+
                 combines.Add(new CombineInstance
                 {
                     mesh = mesh,

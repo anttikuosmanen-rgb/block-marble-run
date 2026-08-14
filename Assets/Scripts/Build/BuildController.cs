@@ -278,6 +278,14 @@ namespace BlockMarbleRun.Build
             if (keyboard.xKey.wasPressedThisFrame)
                 CycleRoleUnderCursor();
 
+            // Raising and lowering a structure. Not shift+click as first suggested: shift now holds a
+            // placement steady, and a modifier that means two things is a modifier that surprises.
+            if (keyboard.equalsKey.wasPressedThisFrame || keyboard.numpadPlusKey.wasPressedThisFrame)
+                MoveAssemblyUnderCursor(1);
+
+            if (keyboard.minusKey.wasPressedThisFrame || keyboard.numpadMinusKey.wasPressedThisFrame)
+                MoveAssemblyUnderCursor(-1);
+
             if (keyboard.vKey.wasPressedThisFrame)
                 SetTool(CurrentTool == Tool.Place ? Tool.Grab : Tool.Place);
 
@@ -388,6 +396,113 @@ namespace BlockMarbleRun.Build
         }
 
         public byte ColourIndex => _colorIndex;
+
+        /// <summary>
+        /// Raises or lowers the structure under the cursor by a layer, carrying everything attached.
+        /// </summary>
+        void MoveAssemblyUnderCursor(int layers)
+        {
+            Mouse mouse = Mouse.current;
+            if (mouse == null)
+                return;
+
+            PlacedPart seed = PartUnderCursor(mouse.position.ReadValue());
+            if (seed == null)
+            {
+                Status = "Point at a piece to raise or lower its structure";
+                return;
+            }
+
+            List<PlacedPart> group = Assembly.Connected(_map, seed);
+            List<PlacedPart> moved = Assembly.Shift(_map, group, layers);
+
+            if (moved == null)
+            {
+                Status = layers > 0 ? "Something is in the way above" : "Cannot go below the ground";
+                return;
+            }
+
+            _selection.Clear();
+
+            var command = new MoveAssemblyCommand(_map, group, moved, PillarDefinition, Spawn);
+            if (_history.Execute(command))
+                Status = $"{(layers > 0 ? "Raised" : "Lowered")} {group.Count} pieces";
+        }
+
+        PlacedPart PartUnderCursor(Vector2 screen)
+        {
+            BuildHit hit = raycaster.RaycastPick(screen);
+            if (!hit.Valid || hit.Collider == null)
+                return null;
+
+            var marker = hit.Collider.GetComponentInParent<PlacedPartMarker>();
+            return marker != null ? marker.Part : null;
+        }
+
+        /// <summary>
+        /// The structure a pending placement would join, found through the mouth it is mating with.
+        ///
+        /// Falls back to everything only when no join can be found, which should not happen - the
+        /// placement exists because the solver mated it with an existing mouth.
+        /// </summary>
+        List<PlacedPart> ConnectedToPlacement(PlacedPart candidate)
+        {
+            foreach (PlacedPart.WorldPort port in candidate.WorldPorts())
+            {
+                PlacedPart joined = _map.FindConnection(candidate, port);
+                if (joined != null)
+                    return Assembly.Connected(_map, joined);
+            }
+
+            return new List<PlacedPart>(_map.Parts);
+        }
+
+        /// <summary>How many layers the pending placement would need the build lifted by, or zero.</summary>
+        public int GrowthLayers { get; private set; }
+
+        /// <summary>
+        /// Lifts everything already built and places the piece in the room that makes.
+        ///
+        /// The piece keeps the join it was showing; only the world moves under it, which is why the
+        /// placement is simply the same one shifted by the same amount.
+        /// </summary>
+        void GrowAndPlace(PlacedPart below, int layers)
+        {
+            // Only what the new piece is joining, not the whole world. Lifting every part in the map
+            // carried unrelated builds along with the one being extended - they moved for a reason
+            // that had nothing to do with them.
+            List<PlacedPart> all = ConnectedToPlacement(below);
+
+            List<PlacedPart> moved = Assembly.Shift(_map, all, layers);
+            if (moved == null)
+            {
+                Status = "Cannot lift the build to make room";
+                return;
+            }
+
+            var raised = new PlacedPart(below.Definition,
+                new GridCoord(below.Origin.x, below.Origin.y, below.Origin.layer + layers),
+                below.Rotation, _colorIndex);
+
+            _selection.Clear();
+
+            var command = new GrowAndPlaceCommand(
+                new MoveAssemblyCommand(_map, all, moved, PillarDefinition, Spawn),
+                new PlaceWithSupportsCommand(_map, raised, PillarDefinition, Spawn));
+
+            if (!_history.Execute(command))
+            {
+                // Silence here read as the whole feature being broken: the build lifted, the piece
+                // was refused, and the rollback put everything back looking untouched.
+                Status = "Could not place underneath - something is in the way";
+                return;
+            }
+
+            {
+                _lastPlaced = raised;
+                Status = $"Lifted the build {layers} layer(s) and placed underneath";
+            }
+        }
 
         void DeleteSelection()
         {
@@ -583,7 +698,19 @@ namespace BlockMarbleRun.Build
 
             PlacementResult result = _map.CanPlace(candidate);
 
-            ghost.Show(candidate, result, factory.Catalog.ColorAt(_colorIndex));
+            // A placement below the ground is shown where it would be, sunk into the floor, so the
+            // offer is visible rather than described. Choosing it lifts the build to make the room.
+            bool needsGrowth = candidate.Origin.layer < 0;
+            GrowthLayers = needsGrowth ? -candidate.Origin.layer : 0;
+
+            ghost.Show(candidate, needsGrowth ? PlacementResult.Unsupported : result,
+                factory.Catalog.ColorAt(_colorIndex));
+
+            if (mouse.leftButton.wasPressedThisFrame && needsGrowth)
+            {
+                GrowAndPlace(candidate, GrowthLayers);
+                return;
+            }
 
             // Unsupported is placeable, not refused: the piece gets pillars built under it. Only a
             // genuine collision blocks placement, in precise mode as much as out of it.
@@ -639,7 +766,8 @@ namespace BlockMarbleRun.Build
             if (def.ports is { Length: > 1 } &&
                 PlacementSolver.NearestOpenMouth(_map, cursorCell.CellCentre, MouthSearchRange, out PlacedPart.WorldPort target))
             {
-                List<PlacedPart> matings = PlacementSolver.MatingsWith(_map, def, _colorIndex, target);
+                List<PlacedPart> matings = PlacementSolver.MatingsWith(_map, def, _colorIndex, target,
+                    allowBelowGround: true);
 
                 if (matings.Count > 0)
                 {

@@ -46,6 +46,14 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestOffCentreMeshPositioning();
             TestScaffoldingNeverBlocksItsOwnPart();
             TestRampLeavesLowerLayerFree();
+            TestAssemblyMovesTogether();
+            TestMirrorsKeepTheirLayerMasks();
+            TestRaisedEndIsCarriedAtGroundLevel();
+            TestNoPillarUnderTheArcOfACurve();
+            TestStraightRampIsCarriedAtItsEndsOnly();
+            TestLiftedSupportColumnGrows();
+            TestLiftedGroundLevelTrackGetsSupports();
+            TestScaffoldingLeavesRoomForTheDescendingPiece();
 
             string summary = $"[GridSelfTest] {_passed} passed, {_failed} failed.\n{_log}";
             if (_failed > 0)
@@ -519,6 +527,46 @@ namespace BlockMarbleRun.EditorTools.Tests
                 map.CanPlace(new PlacedPart(brick, new GridCoord(0, 1, 0), 0, 0)) != PlacementResult.Blocked);
         }
 
+        /// <summary>
+        /// Raising a structure has to carry everything attached, through studs and through channels
+        /// alike, and has to refuse a move that will not fit rather than half-perform it.
+        /// </summary>
+        static void TestAssemblyMovesTogether()
+        {
+            var map = new GridMap();
+            PartDefinition brick = MakeDef("block_2x2", new Vector2Int(2, 2), 1, studs: true);
+            PartDefinition track = MakeTrack("track_2x2", new Vector2Int(2, 2));
+
+            // A brick, a track resting on it, and a second track joined to the first.
+            var bottom = new PlacedPart(brick, new GridCoord(0, 0, 0), 0, 0);
+            var carried = new PlacedPart(track, new GridCoord(0, 0, 1), 0, 0);
+            var joined = new PlacedPart(track, new GridCoord(0, 2, 1), 0, 0);
+
+            map.Add(bottom);
+            map.Add(carried);
+            map.Add(joined);
+
+            List<PlacedPart> group = Assembly.Connected(map, bottom);
+            Check("stacking and channels both hold an assembly together", group.Count == 3,
+                $"found {group.Count}");
+
+            List<PlacedPart> up = Assembly.Shift(map, group, 1);
+            Check("a clear move is allowed", up != null && up.Count == 3);
+            Check("everything moves by the same amount",
+                up != null && up[0].Origin.layer == bottom.Origin.layer + 1);
+
+            // Ground is the floor: the structure cannot be pushed through it.
+            Check("a move below the ground is refused", Assembly.Shift(map, group, -1) == null);
+
+            // Something in the way above.
+            map.Add(new PlacedPart(brick, new GridCoord(0, 0, 3), 0, 0));
+            Check("a blocked move is refused", Assembly.Shift(map, group, 2) == null);
+
+            // A part is allowed into cells its own assembly is vacating.
+            List<PlacedPart> single = Assembly.Connected(map, joined);
+            Check("an assembly may move into its own vacated cells", Assembly.Shift(map, single, 0) == null);
+        }
+
         // --- helpers -------------------------------------------------------------------------
 
         /// <summary>
@@ -604,6 +652,353 @@ namespace BlockMarbleRun.EditorTools.Tests
 
             _failed++;
             _log.AppendLine($"  FAIL: {what}{(detail != null ? $" - {detail}" : "")}");
+        }
+
+        /// <summary>
+        /// Every generated mirror carries per-layer occupancy of its own.
+        ///
+        /// A part whose layerMasks array does not match its footprint is treated as having none, and
+        /// a part with none is a solid prism. Mirrors were being built without them, so a mirrored
+        /// slide curve claimed both layers in every column - its raised end looked as though it
+        /// reached the ground and the pillar under it stopped a layer short. Nothing announced this:
+        /// the fallback is deliberate and silent, and the part still placed and still looked right.
+        /// </summary>
+        static void TestMirrorsKeepTheirLayerMasks()
+        {
+            int checkedParts = 0;
+
+            foreach (string guid in AssetDatabase.FindAssets("t:PartDefinition"))
+            {
+                var def = AssetDatabase.LoadAssetAtPath<PartDefinition>(
+                    AssetDatabase.GUIDToAssetPath(guid));
+
+                if (def == null || string.IsNullOrEmpty(def.mirrorOf))
+                    continue;
+
+                PartDefinition source = FindDefinition(def.mirrorOf);
+                if (source == null || source.layerMasks == null)
+                    continue;
+
+                checkedParts++;
+
+                int plane = def.footprintSize.x * def.footprintSize.y;
+                int layers = Mathf.Max(1, def.heightLayers);
+
+                Check($"{def.id} has per-layer masks",
+                    def.layerMasks != null && def.layerMasks.Length == plane * layers);
+
+                if (def.layerMasks == null || def.layerMasks.Length != plane * layers)
+                    continue;
+
+                // And they are the source's, flipped in x - not a copy, which would be just as wrong
+                // and would pass a length check.
+                bool mirrored = true;
+
+                for (int layer = 0; layer < layers && mirrored; layer++)
+                for (int y = 0; y < def.footprintSize.y && mirrored; y++)
+                for (int x = 0; x < def.footprintSize.x; x++)
+                {
+                    int from = layer * plane + y * def.footprintSize.x + x;
+                    int to = layer * plane + y * def.footprintSize.x + (def.footprintSize.x - 1 - x);
+
+                    if (def.layerMasks[to] != source.layerMasks[from])
+                    {
+                        mirrored = false;
+                        break;
+                    }
+                }
+
+                Check($"{def.id} layer masks are {def.mirrorOf} flipped in x", mirrored);
+            }
+
+            Check("some mirrors exist to check", checkedParts > 0);
+        }
+
+        static PartDefinition FindDefinition(string id)
+        {
+            foreach (string guid in AssetDatabase.FindAssets("t:PartDefinition"))
+            {
+                var def = AssetDatabase.LoadAssetAtPath<PartDefinition>(
+                    AssetDatabase.GUIDToAssetPath(guid));
+
+                if (def != null && def.id == id)
+                    return def;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// A curve sitting at layer 0 still gets a pillar under its raised end.
+        ///
+        /// The scaffolder used to return early for anything whose origin was on the floor, reading
+        /// "layer 0" as "resting on the ground". A slide curve's raised end occupies only its upper
+        /// layer, so it hangs over nothing even when the rest of the piece is on the floor.
+        /// </summary>
+        static void TestRaisedEndIsCarriedAtGroundLevel()
+        {
+            PartDefinition curve = FindDefinition("slide_curve_4x4");
+            PartDefinition pillar = FindDefinition("building_block_2x2");
+
+            if (curve == null || pillar == null)
+            {
+                Check("slide curve and pillar parts exist", false);
+                return;
+            }
+
+            var map = new GridMap();
+            var part = new PlacedPart(curve, new GridCoord(0, 0, 0), 0, 0);
+
+            List<PlacedPart> supports = ScaffoldBuilder.BuildSupports(map, part, pillar);
+
+            Check("a curve on the ground still props its raised end", supports.Count > 0,
+                $"got {supports.Count} bricks");
+
+            // Under the raised end, not somewhere convenient: the columns whose lowest occupied layer
+            // is above the floor are exactly the ones needing carrying.
+            bool underRaised = false;
+
+            foreach (PlacedPart brick in supports)
+                foreach (GridCoord cell in brick.OccupiedCells())
+                    if (cell.layer == 0)
+                        underRaised = true;
+
+            Check("that pillar stands on the ground layer", underRaised);
+        }
+
+        /// <summary>
+        /// No pillar stands under the falling part of a curve's arc.
+        ///
+        /// The rule that carries a raised mouth's overhang used to step one pillar-width inward
+        /// unconditionally. On a curve that is already past the raised end and into the part's own
+        /// base, so the brick stood wholly beneath the curved shell - propping something that rested
+        /// on the ground regardless, with no antistud above it to clutch to.
+        /// </summary>
+        static void TestNoPillarUnderTheArcOfACurve()
+        {
+            PartDefinition curve = FindDefinition("slide_curve_4x4");
+            PartDefinition pillar = FindDefinition("building_block_2x2");
+
+            if (curve == null || pillar == null)
+            {
+                Check("slide curve and pillar parts exist", false);
+                return;
+            }
+
+            for (int rot = 0; rot < 4; rot++)
+            {
+                var map = new GridMap();
+                var part = new PlacedPart(curve, new GridCoord(0, 0, 1), rot, 0);
+
+                List<PlacedPart> supports = ScaffoldBuilder.BuildSupports(map, part, pillar);
+
+                // Every brick must be directly under a column whose lowest occupied layer is above it:
+                // that is what "carrying" means. A brick under a column the part already rests on with
+                // its base is propping nothing.
+                foreach (PlacedPart brick in supports)
+                {
+                    var top = new GridCoord(brick.Origin.x, brick.Origin.y, brick.Origin.layer + 1);
+
+                    bool carries = false;
+
+                    foreach (GridCoord cell in part.OccupiedCells())
+                        if (cell.layer >= top.layer &&
+                            cell.x >= brick.Origin.x && cell.x < brick.Origin.x + pillar.footprintSize.x &&
+                            cell.y >= brick.Origin.y && cell.y < brick.Origin.y + pillar.footprintSize.y)
+                            carries = true;
+
+                    Check($"rot {rot}: pillar at ({brick.Origin.x},{brick.Origin.y},{brick.Origin.layer}) carries something",
+                        carries);
+                }
+            }
+        }
+
+        /// <summary>
+        /// A straight ramp gets pillars under its two ends and nothing in between.
+        ///
+        /// Its channel climbs while its base stays flat, so the far mouth's channel floor is a layer
+        /// above the near one - but nothing about the piece overhangs. Deciding from the channel
+        /// height rather than the underside put a surplus pillar under the middle of every one.
+        /// </summary>
+        static void TestStraightRampIsCarriedAtItsEndsOnly()
+        {
+            PartDefinition ramp = FindDefinition("slide_2x4");
+            PartDefinition pillar = FindDefinition("building_block_2x2");
+
+            if (ramp == null || pillar == null)
+            {
+                Check("slide_2x4 and pillar parts exist", false);
+                return;
+            }
+
+            for (int rot = 0; rot < 4; rot++)
+            {
+                var map = new GridMap();
+                var part = new PlacedPart(ramp, new GridCoord(0, 0, 2), rot, 0);
+
+                List<PlacedPart> supports = ScaffoldBuilder.BuildSupports(map, part, pillar);
+
+                // Two columns of two, one at each mouth.
+                var columns = new HashSet<Vector2Int>();
+                foreach (PlacedPart brick in supports)
+                    columns.Add(new Vector2Int(brick.Origin.x, brick.Origin.y));
+
+                Check($"rot {rot}: a straight ramp stands on two pillars", columns.Count == 2,
+                    $"got {columns.Count} columns from {supports.Count} bricks");
+            }
+        }
+
+        /// <summary>
+        /// Raising a build grows the columns under it back down to the ground.
+        ///
+        /// The lifted parts are already in the map at their new height when the columns are measured,
+        /// so asking what stands in a column answered with the very brick needing carrying: the fill
+        /// started above it and ran zero times, and every support stayed hanging where the lift left
+        /// it.
+        /// </summary>
+        static void TestLiftedSupportColumnGrows()
+        {
+            PartDefinition pillar = FindDefinition("building_block_2x2");
+            PartDefinition ramp = FindDefinition("slide_2x4");
+
+            if (pillar == null || ramp == null)
+            {
+                Check("lift test parts exist", false);
+                return;
+            }
+
+            var map = new GridMap();
+            var brick = new PlacedPart(pillar, new GridCoord(0, 0, 0), 0, 0);
+            var track = new PlacedPart(ramp, new GridCoord(0, 0, 1), 0, 0);
+
+            map.Add(brick);
+            map.Add(track);
+
+            var all = new List<PlacedPart>(map.Parts);
+            List<PlacedPart> moved = Assembly.Shift(map, all, 1);
+
+            Check("the build shifts up a layer", moved != null);
+            if (moved == null)
+                return;
+
+            foreach (PlacedPart part in all) map.Remove(part);
+            foreach (PlacedPart part in moved) map.Add(part);
+
+            List<PlacedPart> grown = ScaffoldBuilder.ExtendLiftedColumns(map, moved, pillar);
+
+            Check("the lifted column is grown back to the ground", grown.Count > 0,
+                $"added {grown.Count}");
+
+            bool onGround = false;
+            foreach (PlacedPart part in grown)
+                if (part.Origin.layer == 0)
+                    onGround = true;
+
+            Check("and it reaches layer 0", onGround);
+        }
+
+        /// <summary>
+        /// Track that was resting on the ground is propped once a lift puts air under it.
+        ///
+        /// Placement scaffolds before the piece joins the map, a lift scaffolds after it has already
+        /// moved - and measuring the whole column in the second case answered with the lifted piece
+        /// itself, so every anchor decided it was already resting on something.
+        /// </summary>
+        static void TestLiftedGroundLevelTrackGetsSupports()
+        {
+            PartDefinition ramp = FindDefinition("slide_2x4");
+            PartDefinition pillar = FindDefinition("building_block_2x2");
+
+            if (ramp == null || pillar == null)
+            {
+                Check("lifted track test parts exist", false);
+                return;
+            }
+
+            var map = new GridMap();
+            var track = new PlacedPart(ramp, new GridCoord(0, 0, 0), 0, 0);
+            map.Add(track);
+
+            var all = new List<PlacedPart>(map.Parts);
+            List<PlacedPart> moved = Assembly.Shift(map, all, 1);
+
+            Check("ground-level track shifts up", moved != null);
+            if (moved == null)
+                return;
+
+            foreach (PlacedPart part in all) map.Remove(part);
+            foreach (PlacedPart part in moved) map.Add(part);
+
+            // Scaffolded after the move, exactly as the lift command does it.
+            int built = 0;
+            foreach (PlacedPart part in moved)
+                built += ScaffoldBuilder.BuildSupports(map, part, pillar).Count;
+
+            Check("lifted track is given supports", built > 0, $"built {built}");
+        }
+
+        /// <summary>
+        /// Propping a lifted run must not fill the space the piece being placed is descending into.
+        ///
+        /// Growing the build and placing underneath is one action, and its order is load bearing.
+        /// Scaffolding the raised run first puts a pillar exactly where the new piece was heading,
+        /// the placement is refused, and the action rolls itself back leaving no trace of why.
+        /// </summary>
+        static void TestScaffoldingLeavesRoomForTheDescendingPiece()
+        {
+            PartDefinition ramp = FindDefinition("slide_2x4");
+            PartDefinition pillar = FindDefinition("building_block_2x2");
+
+            if (ramp == null || pillar == null)
+            {
+                Check("underground test parts exist", false);
+                return;
+            }
+
+            var map = new GridMap();
+            var seed = new PlacedPart(ramp, new GridCoord(0, 0, 0), 0, 0);
+            map.Add(seed);
+
+            // The offer the build makes: a mating that lands below the ground.
+            PlacedPart candidate = null;
+
+            foreach (PlacedPart.WorldPort target in seed.WorldPorts())
+            foreach (PlacedPart mating in PlacementSolver.MatingsWith(map, ramp, 0, target,
+                                                                     allowBelowGround: true))
+                if (mating.Origin.layer < 0)
+                    candidate = mating;
+
+            Check("an underground placement is offered", candidate != null);
+            if (candidate == null)
+                return;
+
+            int layers = -candidate.Origin.layer;
+            var all = new List<PlacedPart>(map.Parts);
+            List<PlacedPart> moved = Assembly.Shift(map, all, layers);
+
+            Check("the build lifts to make room", moved != null);
+            if (moved == null)
+                return;
+
+            foreach (PlacedPart part in all) map.Remove(part);
+            foreach (PlacedPart part in moved) map.Add(part);
+
+            var raised = new PlacedPart(candidate.Definition,
+                new GridCoord(candidate.Origin.x, candidate.Origin.y, candidate.Origin.layer + layers),
+                candidate.Rotation, 0);
+
+            // Placed before the lifted run is propped, which is the order the command uses.
+            Check("the piece goes in before the props do", map.CanPlace(raised) != PlacementResult.Blocked);
+            map.Add(raised);
+
+            // And propping afterwards must not disturb it.
+            foreach (PlacedPart part in moved)
+                if (part.HasPorts)
+                    ScaffoldBuilder.BuildSupports(map, part, pillar);
+
+            ScaffoldBuilder.ExtendLiftedColumns(map, moved, pillar);
+
+            Check("the placed piece survives the propping", map.Contains(raised));
         }
     }
 }

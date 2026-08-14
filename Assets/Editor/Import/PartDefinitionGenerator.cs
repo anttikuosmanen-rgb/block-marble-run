@@ -207,6 +207,8 @@ namespace BlockMarbleRun.EditorTools.Import
             def.rotation = source.rotation;
 
             def.footprintMask = MirrorBuilder.MirrorMask(source.footprintMask, source.footprintSize);
+            def.layerMasks = MirrorBuilder.MirrorLayerMasks(source.layerMasks, source.footprintSize,
+                                                            Mathf.Max(1, source.heightLayers));
             def.topStuds = MirrorBuilder.MirrorMask(source.topStuds, source.footprintSize);
             def.bottomSockets = MirrorBuilder.MirrorMask(source.bottomSockets, source.footprintSize);
             def.ports = MirrorBuilder.MirrorPorts(source.ports, source.footprintSize);

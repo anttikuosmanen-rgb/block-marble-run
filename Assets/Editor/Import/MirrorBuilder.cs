@@ -40,6 +40,33 @@ namespace BlockMarbleRun.EditorTools.Import
         static Vector3 NegateX(Vector3 v) => new Vector3(-v.x, v.y, v.z);
 
         /// <summary>Mirrors a row-major footprint/stud mask across X.</summary>
+        /// <summary>
+        /// Mirrors a stack of per-layer masks, one layer at a time.
+        ///
+        /// Not covered by <see cref="MirrorMask"/>: that one takes a single footprint-sized plane and
+        /// rejects anything longer, so a layered mask passed to it came straight back unmirrored - and
+        /// a mask whose length no longer matches the footprint is treated by the part as absent, which
+        /// falls back to a solid prism. Every mirrored slide curve therefore claimed both its layers
+        /// in every column, its raised end looked as though it reached the ground, and the pillar
+        /// under it stopped a layer short of the part it was carrying.
+        /// </summary>
+        public static bool[] MirrorLayerMasks(bool[] masks, Vector2Int size, int layers)
+        {
+            int plane = size.x * size.y;
+            if (masks == null || plane == 0 || layers <= 0 || masks.Length != plane * layers)
+                return masks;
+
+            var flipped = new bool[masks.Length];
+
+            for (int layer = 0; layer < layers; layer++)
+            for (int y = 0; y < size.y; y++)
+            for (int x = 0; x < size.x; x++)
+                flipped[layer * plane + y * size.x + (size.x - 1 - x)] =
+                    masks[layer * plane + y * size.x + x];
+
+            return flipped;
+        }
+
         public static bool[] MirrorMask(bool[] mask, Vector2Int size)
         {
             if (mask == null || mask.Length != size.x * size.y)

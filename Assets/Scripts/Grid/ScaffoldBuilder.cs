@@ -29,8 +29,23 @@ namespace BlockMarbleRun.Grid
 
             // Only channel parts prop themselves up. A brick is the player's own structure and may
             // cantilever as far as they like; a run of track is meant to look carried.
-            if (pillar == null || part.Origin.layer <= 0 || !part.HasPorts)
+            if (pillar == null || !part.HasPorts)
+            {
+                // Said out loud rather than returning quietly. The first curve placed reported
+                // nothing at all, which read as the log being broken.
+                if (Verbose)
+                    Report = $"{part.Definition.id} at layer {part.Origin.layer}: " +
+                             (pillar == null ? "no pillar part"
+                                             : "not a channel piece - bricks may cantilever");
+
                 return supports;
+            }
+
+            // Sitting at layer 0 is not the same as resting on the ground. A slide curve's raised end
+            // occupies only its upper layer, so even with the part's origin on the floor that end
+            // hangs a layer up with nothing beneath it. Testing the origin skipped the whole piece;
+            // the per-anchor test below asks each column separately and answers "nothing to fill" for
+            // the ends that genuinely do reach the ground.
 
             // Pillars are built before the part goes in, so the map cannot yet see where the part
             // will be. Without this the scaffolding happily fills a cell the part needs, the part
@@ -38,15 +53,29 @@ namespace BlockMarbleRun.Grid
             // shown green.
             var partCells = new HashSet<GridCoord>(part.OccupiedCells());
 
-            foreach ((Vector2Int anchor, int topLayer) in ChoosePillarAnchors(part, pillar))
+            if (Verbose)
+                Report = $"{part.Definition.id} r{part.Rotation} at layer {part.Origin.layer}";
+
+            foreach ((Vector2Int anchor, int topLayer, string why) in ChoosePillarAnchors(part, pillar))
             {
-                int from = HighestObstruction(map, pillar, anchor);
+                // Measured below the part's own underside, so it makes no difference whether the part
+                // is in the map yet. Placement scaffolds before adding the piece; a lift scaffolds
+                // after moving it, and asking the whole column there answered with the lifted part
+                // itself - every anchor reported "rests already" and a run raised off the ground kept
+                // no supports at all.
+                int from = HighestObstructionBelow(map, pillar, anchor, topLayer);
+                int built = 0;
 
                 // Asked per column, not once for the whole part. A slide joined to an elevated run is
                 // "supported" by that joint, yet its far end still hangs over nothing four studs away
                 // - and a whole-part test reports it as fine and builds no pillars at all.
                 if (from >= topLayer)
+                {
+                    if (Verbose)
+                        Report += $"\n  ({anchor.x},{anchor.y}) {why}: top {topLayer} from {from} - rests already";
+
                     continue;
+                }
 
                 for (int layer = from; layer < topLayer; layer++)
                 {
@@ -54,15 +83,93 @@ namespace BlockMarbleRun.Grid
 
                     // Stop this pillar at the first obstruction rather than abandoning it: the part of
                     // the column that fits is still load bearing.
-                    if (Intersects(brick, partCells) || map.CanPlace(brick) == PlacementResult.Blocked)
+                    // Named separately so the report can say which of the two stopped the column: a
+                    // clash with the part itself and a clash with the existing build look identical
+                    // from the outside and mean quite different things.
+                    bool inPart = Intersects(brick, partCells);
+
+                    if (inPart || map.CanPlace(brick) == PlacementResult.Blocked)
+                    {
+                        if (Verbose)
+                            Report += $" - stopped at {layer} by {(inPart ? "the part" : "the build")}";
+
                         break;
+                    }
 
                     map.Add(brick);
                     supports.Add(brick);
+                    built++;
                 }
+
+                if (Verbose)
+                    Report = Report.TrimEnd() +
+                             $"\n  ({anchor.x},{anchor.y}) {why}: top {topLayer} from {from} - {built} brick(s)";
             }
 
             return supports;
+        }
+
+        /// <summary>
+        /// Whether to record what the scaffolder decided. Off by default, toggled with J while
+        /// building - which is where scaffolding happens, and so where the answer has to be readable.
+        ///
+        /// Three attempts at the slide curve's missing support were made by reading screenshots and
+        /// reasoning about masks, and all three were wrong. Where the anchors actually land, and what
+        /// stopped each column, is a fact the code knows and nobody could see.
+        /// </summary>
+        public static bool Verbose;
+
+        /// <summary>The last decision, anchor by anchor, for the build HUD to display.</summary>
+        public static string Report = "";
+
+        /// <summary>
+        /// Fills the gap under bricks that have been lifted, so a raised structure still stands.
+        ///
+        /// Ordinary placement lets a brick cantilever - it is the player's own structure and they may
+        /// build what they like. A lift is different: the pillars that were holding the build up are
+        /// now hanging a layer above where they were, and nobody asked for that. Their columns are
+        /// grown back down to meet whatever is beneath.
+        /// </summary>
+        public static List<PlacedPart> ExtendLiftedColumns(GridMap map, List<PlacedPart> moved,
+                                                           PartDefinition pillar)
+        {
+            var added = new List<PlacedPart>();
+            if (pillar == null)
+                return added;
+
+            foreach (PlacedPart part in moved)
+            {
+                // Channel pieces are propped by the usual rules; this is about the bricks holding them.
+                if (part.HasPorts || part.Origin.layer <= 0 || map.IsSupported(part))
+                    continue;
+
+                // Every pillar-sized patch of the part's base, not just its origin corner. A long
+                // brick lifted off its supports needs its whole underside carried, and filling only
+                // the corner leaves the rest of it hanging exactly as it was.
+                Vector2Int size = part.RotatedSize;
+                Vector2Int step = pillar.footprintSize;
+
+                for (int dx = 0; dx < size.x; dx += step.x)
+                for (int dy = 0; dy < size.y; dy += step.y)
+                {
+                    var anchor = new Vector2Int(part.Origin.x + dx, part.Origin.y + dy);
+                    int from = HighestObstructionBelow(map, pillar, anchor, part.Origin.layer);
+
+                    for (int layer = from; layer < part.Origin.layer; layer++)
+                    {
+                        var brick = new PlacedPart(pillar, new GridCoord(anchor.x, anchor.y, layer),
+                            0, ScaffoldColour);
+
+                        if (map.CanPlace(brick) == PlacementResult.Blocked)
+                            break;
+
+                        map.Add(brick);
+                        added.Add(brick);
+                    }
+                }
+            }
+
+            return added;
         }
 
         /// <summary>Grey, so scaffolding reads as structure rather than as part of the design.</summary>
@@ -95,7 +202,8 @@ namespace BlockMarbleRun.Grid
         /// curve's raised end a layer short because every pillar was sized to the part's base rather
         /// than to the channel above it.
         /// </summary>
-        static IEnumerable<(Vector2Int anchor, int topLayer)> ChoosePillarAnchors(PlacedPart part, PartDefinition pillar)
+        static IEnumerable<(Vector2Int anchor, int topLayer, string why)> ChoosePillarAnchors(
+            PlacedPart part, PartDefinition pillar)
         {
             var seen = new HashSet<Vector2Int>();
             int mouths = 0;
@@ -120,8 +228,50 @@ namespace BlockMarbleRun.Grid
                     ? new Vector2Int(alongMin, acrossMin)
                     : new Vector2Int(acrossMin, alongMin);
 
+                int mouthUnderside = UndersideLayer(part, anchor, pillar, port.FloorLayer);
+
                 if (seen.Add(anchor))
-                    yield return (anchor, UndersideLayer(part, anchor, pillar, port.FloorLayer));
+                    yield return (anchor, mouthUnderside, $"mouth {port.Facing}");
+
+                // A raised mouth may hang past whatever carries the low end, and the straddling pillar
+                // only holds its lip. This one holds the overhang just inside it.
+                //
+                // Measured from the part's underside, not from its channel height. A straight ramp's
+                // channel climbs while its base stays flat on the ground - the far mouth's floor is a
+                // layer up, yet nothing about the piece overhangs, and asking about the channel put a
+                // surplus pillar under the middle of every slide_2x4.
+                if (mouthUnderside <= part.Origin.layer)
+                    continue;
+
+                Vector2Int inward = port.Facing switch
+                {
+                    Facing.North => new Vector2Int(0, -1),
+                    Facing.South => new Vector2Int(0, 1),
+                    Facing.East => new Vector2Int(-1, 0),
+                    _ => new Vector2Int(1, 0),
+                };
+
+                // Stepped by the pillar's own width, not one stud. A 2x2 brick moved one stud inward
+                // overlaps the straddling pillar, which makes the placement blocked and drops it
+                // silently - the support simply never appeared.
+                Vector2Int deeper = anchor + new Vector2Int(inward.x * pillar.footprintSize.x,
+                                                            inward.y * pillar.footprintSize.y);
+
+                int deeperUnderside = UndersideLayer(part, deeper, pillar, port.FloorLayer);
+
+                // Only while the overhang lasts. This pillar exists to carry a raised mouth whose
+                // lip reaches further in than the pillar straddling it - so it belongs under the
+                // raised region, and its underside has to be as high as the mouth's.
+                //
+                // On a curve the arc drops away immediately, and one step inward is already the
+                // part's own base: a brick there stands wholly beneath the curved shell, carrying
+                // something that was resting on the ground anyway. It was surplus, and on a piece
+                // with no antistud under that curve it had nothing to clutch to either.
+                if (deeperUnderside < mouthUnderside)
+                    continue;
+
+                if (seen.Add(deeper))
+                    yield return (deeper, deeperUnderside, $"inside raised {port.Facing}");
             }
 
             Vector2Int size = part.RotatedSize;
@@ -136,7 +286,7 @@ namespace BlockMarbleRun.Grid
                     part.Origin.y + Mathf.Max(0, size.y - step.y));
 
                 if (seen.Add(farCorner))
-                    yield return (farCorner, part.Origin.layer);
+                    yield return (farCorner, part.Origin.layer, "dead end");
 
                 yield break;
             }
@@ -174,19 +324,24 @@ namespace BlockMarbleRun.Grid
         }
 
         /// <summary>
-        /// Layer to start the pillar from: on top of whatever already stands in that column, so a
-        /// support added beside an existing tower begins at the tower's height rather than burrowing
-        /// down beside it.
+        /// As <see cref="HighestObstruction"/>, but blind to anything at <paramref name="below"/> or
+        /// above.
+        ///
+        /// A part that has just been lifted is already in the map at its new layer, so asking the
+        /// column what stands in it answers with the part itself: the rest layer came back one above
+        /// the brick needing carrying, the fill loop ran zero times, and a raised build kept its
+        /// supports hanging exactly where the lift left them.
         /// </summary>
-        static int HighestObstruction(GridMap map, PartDefinition pillar, Vector2Int anchor)
+        static int HighestObstructionBelow(GridMap map, PartDefinition pillar, Vector2Int anchor, int below)
         {
-            int highest = 0;
-
+            for (int layer = below - 1; layer >= 0; layer--)
             for (int x = 0; x < pillar.footprintSize.x; x++)
             for (int y = 0; y < pillar.footprintSize.y; y++)
-                highest = Mathf.Max(highest, map.ColumnRestLayer(anchor.x + x, anchor.y + y));
+                if (map.At(new GridCoord(anchor.x + x, anchor.y + y, layer)) != null)
+                    return layer + 1;
 
-            return highest;
+            return 0;
         }
+
     }
 }
