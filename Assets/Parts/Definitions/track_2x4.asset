@@ -22,6 +22,7 @@ MonoBehaviour:
   layerMasks: 0101010101010101
   heightLayers: 1
   pivotOffsetUnits: {x: 0.000000003799796, y: 0.000000003799796}
+  hasTunnel: 0
   topStuds: 0000000000000000
   bottomSockets: 0101010101010101
   rotation: 0

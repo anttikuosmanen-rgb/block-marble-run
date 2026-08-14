@@ -13,6 +13,8 @@ namespace BlockMarbleRun.Build
         public BuildController controller;
         public StressTest stressTest;
         public BlockMarbleRun.Track.OpenPortMarkers markers;
+        public BlockMarbleRun.Play.PlayController play;
+        public BlockMarbleRun.Core.GameMode mode;
 
         GUIStyle _style;
 
@@ -51,9 +53,18 @@ namespace BlockMarbleRun.Build
                 normal = { textColor = Color.white },
             };
 
-            PartDefinition selected = controller.Selected;
+            bool playing = mode != null && mode.Current == BlockMarbleRun.Core.Mode.Play;
 
-            GUILayout.BeginArea(new Rect(12, 12, 640, 260));
+            GUILayout.BeginArea(new Rect(12, 12, 640, 300));
+
+            if (playing)
+            {
+                DrawPlay();
+                GUILayout.EndArea();
+                return;
+            }
+
+            PartDefinition selected = controller.Selected;
             GUILayout.Label($"Part: {(selected != null ? selected.displayName : "none")}", _style);
             GUILayout.Label($"Placed: {controller.Map.Parts.Count}   Cells: {controller.Map.CellCount}", _style);
             GUILayout.Label(
@@ -85,6 +96,7 @@ namespace BlockMarbleRun.Build
             GUILayout.Label("S save    L load", _style);
             GUILayout.Label("Right drag orbit    Middle drag pan    Scroll zoom", _style);
             GUILayout.Label("F frame build    Home origin    Cmd+Z undo    Shift+Cmd+Z redo", _style);
+            GUILayout.Label("Tab play mode", _style);
             GUILayout.Label("Stress: T palette-mat   Y property-block(old)   U palette+sparse   G clear   B reset worst", _style);
             GUILayout.EndArea();
 
@@ -95,6 +107,36 @@ namespace BlockMarbleRun.Build
         /// Draws the drag rectangle. GUI space has its origin at the top left while the mouse reports
         /// from the bottom left, so the rectangle has to be flipped or it appears mirrored vertically.
         /// </summary>
+        void DrawPlay()
+        {
+            GUILayout.Label("PLAY", _style);
+            GUILayout.Label(
+                $"Frame: {_smoothedMs:0.0} ms ({(_smoothedMs > 0f ? 1000f / _smoothedMs : 0f):0} fps)   " +
+                $"Worst: {_worstMs:0.0} ms", _style);
+
+            GUILayout.Label(
+                $"Marbles: {play.Alive} live, {play.Released} released   " +
+                $"Finished: {play.Finished}   Lost: {play.Lost}", _style);
+
+            if (!float.IsPositiveInfinity(play.BestSeconds))
+                GUILayout.Label($"Best run: {play.BestSeconds:0.00} s", _style);
+
+            GUILayout.Space(6);
+            if (play.CurrentType != null)
+            {
+                BlockMarbleRun.Play.MarbleDefinition ball = play.CurrentType;
+                GUILayout.Label(
+                    $"Ball: {ball.displayName}  {ball.diameterMm:0.#} mm  {ball.MassKg * 1000f:0.#} g", _style);
+            }
+
+            if (!string.IsNullOrEmpty(play.Status))
+                GUILayout.Label(play.Status, _style);
+
+            GUILayout.Space(6);
+            GUILayout.Label("Space release from starts    Left click drop a ball    M change ball", _style);
+            GUILayout.Label("R reset    Tab back to building", _style);
+        }
+
         void DrawSelectionBox()
         {
             Rect rect = controller.BoxSelectRect;

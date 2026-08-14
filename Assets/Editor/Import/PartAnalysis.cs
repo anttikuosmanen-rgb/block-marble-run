@@ -41,6 +41,9 @@ namespace BlockMarbleRun.EditorTools.Import
         /// </summary>
         public Vector2 PivotOffsetUnits;
 
+        /// <summary>The underside arches clear of the base and opens out at an edge - a ball can pass under.</summary>
+        public bool HasTunnel;
+
         public MirrorVerdict MirrorVerdict;
         public float MirrorScore;
         public int MirrorBestRotation;
@@ -75,6 +78,7 @@ namespace BlockMarbleRun.EditorTools.Import
             a.DeriveLayerMasks(facets);
             a.DeriveTopStuds(facets);
             a.DerivePorts(facets);
+            a.DeriveTunnel(facets);
             a.DeriveChirality(facets);
 
             return a;
@@ -468,6 +472,101 @@ namespace BlockMarbleRun.EditorTools.Import
             snapped = layer * LayerHeightMm + ChannelFloorMm;
 
             return layer >= 0 && Mathf.Abs(measured - snapped) <= ChannelToleranceMm;
+        }
+
+        /// <summary>
+        /// Detects a through-tunnel: an arch in the underside that opens out at an edge.
+        ///
+        /// bridge_2x3 has one, and it is the whole point of the piece - a ball runs along a channel
+        /// beneath while the bridge carries studs above. Modelled as a solid box it simply walls the
+        /// ball in.
+        ///
+        /// A hollow underside alone is not a tunnel: every brick is hollow. The difference is that a
+        /// brick's hollow is enclosed by walls that reach the base, so its boundary reads solid all
+        /// the way round, while a tunnel reaches the edge and opens out.
+        /// </summary>
+        void DeriveTunnel(List<StlFacet> facets)
+        {
+            const float clearanceMm = 4f; // enough to be an opening rather than a moulding detail
+
+            int w = Mathf.CeilToInt(SizeMm.x / HeightMapRes) + 1;
+            int h = Mathf.CeilToInt(SizeMm.y / HeightMapRes) + 1;
+            if (w <= 4 || h <= 4)
+                return;
+
+            float[] underside = BuildUndersideMap(facets, w, h);
+
+            // Read one sample in from each edge, as the port scan does, to skip the outer skin.
+            const int inset = 1;
+
+            HasTunnel =
+                EdgeIsRaised(underside, w, h, Facing.West, inset, clearanceMm) ||
+                EdgeIsRaised(underside, w, h, Facing.East, inset, clearanceMm) ||
+                EdgeIsRaised(underside, w, h, Facing.South, inset, clearanceMm) ||
+                EdgeIsRaised(underside, w, h, Facing.North, inset, clearanceMm);
+        }
+
+        float[] BuildUndersideMap(List<StlFacet> facets, int w, int h)
+        {
+            var lowest = new float[w * h];
+            for (int i = 0; i < lowest.Length; i++)
+                lowest[i] = float.PositiveInfinity;
+
+            foreach (StlFacet f in facets)
+            {
+                float minX = Mathf.Min(f.A.x, Mathf.Min(f.B.x, f.C.x));
+                float maxX = Mathf.Max(f.A.x, Mathf.Max(f.B.x, f.C.x));
+                float minY = Mathf.Min(f.A.y, Mathf.Min(f.B.y, f.C.y));
+                float maxY = Mathf.Max(f.A.y, Mathf.Max(f.B.y, f.C.y));
+                float minZ = Mathf.Min(f.A.z, Mathf.Min(f.B.z, f.C.z));
+
+                int i0 = Mathf.Clamp(Mathf.FloorToInt((minX - MinMm.x) / HeightMapRes), 0, w - 1);
+                int i1 = Mathf.Clamp(Mathf.CeilToInt((maxX - MinMm.x) / HeightMapRes), 0, w - 1);
+                int j0 = Mathf.Clamp(Mathf.FloorToInt((minY - MinMm.y) / HeightMapRes), 0, h - 1);
+                int j1 = Mathf.Clamp(Mathf.CeilToInt((maxY - MinMm.y) / HeightMapRes), 0, h - 1);
+
+                for (int i = i0; i <= i1; i++)
+                for (int j = j0; j <= j1; j++)
+                {
+                    int index = j * w + i;
+                    if (minZ < lowest[index])
+                        lowest[index] = minZ;
+                }
+            }
+
+            return lowest;
+        }
+
+        /// <summary>True when a run of this edge sits clear of the base - a tunnel mouth.</summary>
+        static bool EdgeIsRaised(float[] underside, int w, int h, Facing facing, int inset, float clearanceMm)
+        {
+            bool alongY = facing == Facing.West || facing == Facing.East;
+            int samples = alongY ? h : w;
+
+            // A couple of stray samples are moulding detail; a mouth is several millimetres wide.
+            const int minimumRun = 6;
+            int run = 0;
+
+            for (int s = 0; s < samples; s++)
+            {
+                int i, j;
+                switch (facing)
+                {
+                    case Facing.West:  i = inset;         j = s; break;
+                    case Facing.East:  i = w - 1 - inset; j = s; break;
+                    case Facing.South: i = s;             j = inset; break;
+                    default:           i = s;             j = h - 1 - inset; break;
+                }
+
+                float value = underside[j * w + i];
+                bool raised = !float.IsPositiveInfinity(value) && value >= clearanceMm;
+
+                run = raised ? run + 1 : 0;
+                if (run >= minimumRun)
+                    return true;
+            }
+
+            return false;
         }
 
         // --- Chirality (DESIGN.md §3.4) -------------------------------------------------------

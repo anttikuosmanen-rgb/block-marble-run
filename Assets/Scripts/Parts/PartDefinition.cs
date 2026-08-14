@@ -103,6 +103,9 @@ namespace BlockMarbleRun.Parts
         [Tooltip("Offset from the mesh's own origin to the centre of its footprint, in world units (XZ).")]
         public Vector2 pivotOffsetUnits;
 
+        [Tooltip("True when the underside arches into a through-tunnel, as bridge_2x3 does. Such a part needs its real geometry for collision.")]
+        public bool hasTunnel;
+
         [Tooltip("Row-major: which cells expose a stud on top. Empty means nothing can stack on this part.")]
         public bool[] topStuds;
 

@@ -26,7 +26,8 @@ namespace BlockMarbleRun.World
     public sealed class BuildRaycaster : MonoBehaviour
     {
         public Camera buildCamera;
-        [SerializeField] LayerMask partLayers = ~0;
+        [Tooltip("Which layers count as parts. The physics floor is excluded so it cannot be built on.")]
+        public LayerMask partLayers = ~0;
 
         [Tooltip("How far a ray may travel before the ground answer is discarded as a grazing hit.")]
         [SerializeField] float maxDistance = 500f;
@@ -82,6 +83,36 @@ namespace BlockMarbleRun.World
             }
 
             return hit;
+        }
+
+        /// <summary>
+        /// Nearest world point under the cursor, counting the ground plane as well as parts.
+        ///
+        /// The visible ground has no collider - it would shadow the analytic placement raycast - so a
+        /// collider-only query returns nothing at all when the player points at open floor.
+        /// </summary>
+        public bool RaycastPoint(Vector2 screenPosition, out Vector3 point)
+        {
+            point = default;
+            if (buildCamera == null)
+                return false;
+
+            Ray ray = buildCamera.ScreenPointToRay(screenPosition);
+
+            bool hitPart = Physics.Raycast(ray, out RaycastHit partHit, maxDistance, partLayers);
+            bool hitGround = Ground.Raycast(ray, out float groundDistance) && groundDistance <= maxDistance;
+
+            if (hitPart && (!hitGround || partHit.distance <= groundDistance))
+            {
+                point = partHit.point;
+                return true;
+            }
+
+            if (!hitGround)
+                return false;
+
+            point = ray.GetPoint(groundDistance);
+            return true;
         }
 
         /// <summary>Cell for picking an existing part - the cell actually hit, not the one above it.</summary>

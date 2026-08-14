@@ -1,9 +1,11 @@
 #if UNITY_EDITOR
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using BlockMarbleRun.Build;
 using BlockMarbleRun.CameraRig;
 using BlockMarbleRun.Parts;
+using BlockMarbleRun.Play;
 using BlockMarbleRun.World;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -36,6 +38,13 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             startMaterial.SetColor("_BaseColor", new Color(0.25f, 0.85f, 0.35f));
             Material goalMaterial = EnsureMaterial("RoleGoal", "Universal Render Pipeline/Lit", opaque: true);
             goalMaterial.SetColor("_BaseColor", new Color(0.98f, 0.78f, 0.15f));
+
+            Material marbleMaterial = EnsureMaterial("Marble", "Universal Render Pipeline/Lit", opaque: true);
+            marbleMaterial.SetColor("_BaseColor", new Color(0.85f, 0.9f, 1f));
+            marbleMaterial.SetFloat("_Smoothness", 0.9f);
+            marbleMaterial.SetFloat("_Metallic", 0.6f);
+
+
             highlightMaterial.SetColor("_BaseColor", new Color(0.35f, 0.85f, 1f));
             highlightMaterial.SetColor("_EmissionColor", new Color(0.10f, 0.35f, 0.5f));
             highlightMaterial.EnableKeyword("_EMISSION");
@@ -48,6 +57,7 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
 
             CreateLighting();
             CreateGround(groundMaterial, cam);
+            CreatePhysicsFloor();
 
             var systems = new GameObject("Systems");
             var partRoot = new GameObject("Parts").transform;
@@ -64,6 +74,10 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
 
             var raycaster = systems.AddComponent<BuildRaycaster>();
             raycaster.buildCamera = cam;
+
+            // Everything except the physics floor. Without this the floor would be treated as a part
+            // to stack on, and the analytic ground raycast it exists alongside would be shadowed.
+            raycaster.partLayers = ~(1 << IgnoreRaycastLayer);
 
             var ghost = systems.AddComponent<GhostPreview>();
             ghost.ghostMaterial = ghostMaterial;
@@ -85,10 +99,23 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             markers.controller = controller;
             markers.markerMaterial = markerMaterial;
 
+            var play = systems.AddComponent<BlockMarbleRun.Play.PlayController>();
+            play.build = controller;
+            play.raycaster = raycaster;
+            play.marbleMaterial = marbleMaterial;
+            play.marbleTypes = EnsureMarbleTypes();
+
+            var mode = systems.AddComponent<BlockMarbleRun.Core.GameMode>();
+            mode.build = controller;
+            mode.play = play;
+            mode.ghost = ghost;
+
             var hud = systems.AddComponent<BuildHud>();
             hud.controller = controller;
             hud.stressTest = stress;
             hud.markers = markers;
+            hud.play = play;
+            hud.mode = mode;
 
             foreach (Component component in systems.GetComponents<Component>())
                 EditorUtility.SetDirty(component);
@@ -99,6 +126,8 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             Verify(ghost.ghostMaterial, "GhostPreview.ghostMaterial");
             Verify(controller.highlightMaterial, "BuildController.highlightMaterial");
             Verify(markers.markerMaterial, "OpenPortMarkers.markerMaterial");
+            Verify(play.marbleMaterial, "PlayController.marbleMaterial");
+
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -178,6 +207,68 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             return material;
         }
 
+        /// <summary>
+        /// The ball types on offer. 24.5 mm is the size these channels are built around; the others
+        /// exist so a run can be tried with something heavier or bouncier.
+        ///
+        /// Friction and bounce carry the difference between materials rather than mass, since gravity
+        /// accelerates every ball alike and mass only tells once momentum meets something else.
+        /// </summary>
+        static List<MarbleDefinition> EnsureMarbleTypes()
+        {
+            var types = new List<MarbleDefinition>
+            {
+                EnsureMarbleType("Plastic", 24.5f, 1.05f, 0.10f, 0.12f, 0.20f,
+                    new Color(0.90f, 0.35f, 0.30f), smoothness: 0.55f, metallic: 0.0f),
+
+                EnsureMarbleType("Glass", 24.5f, 2.50f, 0.06f, 0.08f, 0.28f,
+                    new Color(0.70f, 0.90f, 1.00f), smoothness: 0.95f, metallic: 0.0f),
+
+                EnsureMarbleType("Steel", 24.5f, 7.80f, 0.05f, 0.07f, 0.12f,
+                    new Color(0.75f, 0.78f, 0.82f), smoothness: 0.90f, metallic: 1.0f),
+
+                // Smaller balls rattle in a channel built for 24.5 mm, which is the point of offering
+                // one - it shows how much the channel width is doing.
+                EnsureMarbleType("Small glass", 16.0f, 2.50f, 0.06f, 0.08f, 0.30f,
+                    new Color(0.65f, 1.00f, 0.75f), smoothness: 0.95f, metallic: 0.0f),
+            };
+
+            AssetDatabase.SaveAssets();
+            return types;
+        }
+
+        static MarbleDefinition EnsureMarbleType(string name, float diameterMm, float density,
+                                                 float dynamicFriction, float staticFriction,
+                                                 float bounciness, Color colour,
+                                                 float smoothness, float metallic)
+        {
+            Directory.CreateDirectory("Assets/Parts/Marbles");
+            string path = $"Assets/Parts/Marbles/{name}.asset";
+
+            var def = AssetDatabase.LoadAssetAtPath<MarbleDefinition>(path);
+            if (def == null)
+            {
+                def = ScriptableObject.CreateInstance<MarbleDefinition>();
+                AssetDatabase.CreateAsset(def, path);
+            }
+
+            def.displayName = name;
+            def.diameterMm = diameterMm;
+            def.densityGramsPerCm3 = density;
+            def.dynamicFriction = dynamicFriction;
+            def.staticFriction = staticFriction;
+            def.bounciness = bounciness;
+            def.colour = colour;
+            def.smoothness = smoothness;
+            def.metallic = metallic;
+
+            EditorUtility.SetDirty(def);
+
+            // Re-load after saving, for the same reason the part catalog does (see EnsureCatalog).
+            AssetDatabase.SaveAssets();
+            return AssetDatabase.LoadAssetAtPath<MarbleDefinition>(path);
+        }
+
         static GameObject CreateCamera()
         {
             var go = new GameObject("Main Camera") { tag = "MainCamera" };
@@ -205,6 +296,30 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             RenderSettings.ambientSkyColor = new Color(0.40f, 0.44f, 0.52f);
             RenderSettings.ambientEquatorColor = new Color(0.26f, 0.27f, 0.30f);
             RenderSettings.ambientGroundColor = new Color(0.12f, 0.12f, 0.14f);
+        }
+
+        /// <summary>Unity's built-in "Ignore Raycast" layer, used here to keep the floor out of picking.</summary>
+        const int IgnoreRaycastLayer = 2;
+
+        /// <summary>
+        /// A floor for balls to land on.
+        ///
+        /// The visible ground deliberately has no collider, because one would shadow the analytic
+        /// raycast that placement relies on. That left play mode with no floor whatsoever: a ball
+        /// dropped anywhere but onto track fell straight through the world and was culled below the
+        /// kill height about a sixth of a second later, which reads as the ball flashing and
+        /// vanishing.
+        ///
+        /// Finite, unlike the buildable world. 2000 units is 200 m of table - about 12,500 studs from
+        /// the origin - which no build will reach, and a static box costs nothing to keep around.
+        /// </summary>
+        static void CreatePhysicsFloor()
+        {
+            var floor = new GameObject("Physics Floor") { layer = IgnoreRaycastLayer };
+
+            var box = floor.AddComponent<BoxCollider>();
+            box.size = new Vector3(2000f, 1f, 2000f);
+            box.center = new Vector3(0f, -0.5f, 0f); // top face exactly at ground level
         }
 
         static void CreateGround(Material material, Camera camera)

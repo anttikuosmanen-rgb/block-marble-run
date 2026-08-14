@@ -55,6 +55,7 @@ namespace BlockMarbleRun.EditorTools.Import
                     def.mirrorVerdict = MirrorVerdict.Unreviewed;
 
                 ApplyDerived(def, analysis, name);
+                EnsureReadableIfChannel(stlPath, analysis);
                 def.mesh = AssetDatabase.LoadAssetAtPath<Mesh>(stlPath);
                 EditorUtility.SetDirty(def);
 
@@ -84,6 +85,28 @@ namespace BlockMarbleRun.EditorTools.Import
 
             Debug.Log($"[Parts] {created} created, {updated} refreshed, {mirrors} mirrors generated, " +
                       $"{needsReview} awaiting review.\n{log}");
+        }
+
+        /// <summary>
+        /// Channel meshes keep their CPU copy; everything else stays GPU-only.
+        ///
+        /// A MeshCollider is cooked at runtime and needs to read the mesh, so a channel part cannot be
+        /// uploaded non-readable. Bricks can, and they are the heavy ones - up to 22k triangles each
+        /// against 2-5k for track - so confining readability to the parts that need it keeps most of
+        /// the geometry off the WebGL heap.
+        /// </summary>
+        static void EnsureReadableIfChannel(string stlPath, PartAnalysis analysis)
+        {
+            if (AssetImporter.GetAtPath(stlPath) is not StlScriptedImporter importer)
+                return;
+
+            bool wanted = analysis.Ports.Count > 0 || analysis.HasTunnel;
+            if (importer.readable == wanted)
+                return;
+
+            importer.readable = wanted;
+            EditorUtility.SetDirty(importer);
+            importer.SaveAndReimport();
         }
 
         static PartDefinition LoadOrCreate(string name, ref int created, ref int updated)
@@ -117,6 +140,7 @@ namespace BlockMarbleRun.EditorTools.Import
             def.footprintMask = analysis.FootprintMask;
             def.heightLayers = analysis.HeightLayers;
             def.pivotOffsetUnits = analysis.PivotOffsetUnits;
+            def.hasTunnel = analysis.HasTunnel;
             def.layerMasks = analysis.LayerMasks;
             def.topStuds = analysis.TopStuds;
 

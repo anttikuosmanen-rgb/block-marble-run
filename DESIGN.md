@@ -100,12 +100,12 @@ Fix: work internally in **half-stud units (8 mm)**. A part occupying cells `[min
 
 ## 2. World scale & physics tuning
 
-A 13 mm marble in a 32 mm trough is far below PhysX's comfortable range — `defaultContactOffset` alone is 10 mm by default, i.e. bigger than the marble radius. Two fixes; **use both**:
+The balls these channels are built for are **24.5 mm**, running in a 32 mm trough. (An earlier draft assumed 13 mm; the real size is nearly twice that, which makes the situation less extreme than first reckoned but does not change the conclusion.) PhysX's `defaultContactOffset` is 10 mm by default — still most of a ball radius, and the trough walls are thinner than that. Two fixes; **use both**:
 
 **Scale the world 10×** (1 Unity unit = 10 cm real):
 
 ```
-STL import scale   = 0.01          // brick = 0.318 units, marble = 0.13 units
+STL import scale   = 0.01          // brick = 0.318 units, 24.5 mm ball = 0.245 units
 Physics.gravity    = (0, -98.1, 0) // length scaled by k=10 ⇒ gravity × k keeps
                                    // real-time dynamics identical to a real marble
 ```
@@ -120,17 +120,30 @@ Physics.defaultSolverVelocityIterations = 4
 Physics.bounceThreshold        = 1.0
 ```
 
-Marble rigidbody:
+Ball rigidbody:
 
 ```
 collisionDetectionMode = ContinuousDynamic
-maxAngularVelocity     = 200      // CRITICAL: default 7 rad/s hard-clamps a small
-                                  // rolling sphere and it "sticks"/slides instead of rolls
+maxAngularVelocity     = 200      // CRITICAL: default 7 rad/s hard-clamps a rolling
+                                  // sphere and it "sticks"/slides instead of rolling
 interpolation          = Interpolate
-mass ≈ 0.005 kg, angularDamping ≈ 0.02
+angularDamping ≈ 0.02
 ```
 
-Physics material (marble & track): `dynamicFriction 0.08`, `staticFriction 0.10`, `bounciness 0.15`, combine `Multiply`.
+### 2.1 Balls are a data type, not a constant
+
+Size and material are authored per ball, so a run can be tried with a heavy steel ball or a light plastic one:
+
+| | diameter | density | mass |
+|---|---|---|---|
+| Plastic | 24.5 mm | 1.05 g/cm³ | ~8 g |
+| Glass | 24.5 mm | 2.50 g/cm³ | ~19 g |
+| Steel | 24.5 mm | 7.80 g/cm³ | ~60 g |
+| Small glass | 16.0 mm | 2.50 g/cm³ | ~5 g |
+
+**Mass is derived from density**, never entered directly. Gravity accelerates every ball alike regardless of mass, so the number does nothing on its own — it tells only where momentum meets something else, and hand-entered masses invite values no real material would have. Friction and bounce carry most of the felt difference between materials.
+
+The smaller ball earns its place by rattling in a channel built for 24.5 mm, which shows how much of the run's behaviour the channel width is responsible for.
 
 **WebGL budget.** 120 Hz on a single thread is affordable *because the track is static* — PhysX broadphase over sleeping static colliders is nearly free, and only the marbles are dynamic. The cost scales with concurrent marbles, not with build size. Guards:
 

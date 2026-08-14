@@ -114,15 +114,54 @@ namespace BlockMarbleRun.Parts
         }
 
         /// <summary>
-        /// Primitive colliders sized from the footprint, never the render mesh: the meshes run to
-        /// 22k triangles and a marble channel is concave, so neither a mesh collider nor a convex
-        /// hull would do.
+        /// Collision comes from the footprint for bricks and from the mesh for channels.
+        ///
+        /// DESIGN.md §3.3 originally ruled the render mesh out entirely, on the grounds that parts run
+        /// to 22k triangles and a marble channel is concave. Both facts are true and neither is an
+        /// obstacle once the numbers are split by category. A *static* mesh collider handles concave
+        /// geometry natively - only convex ones need decomposition - and PhysX cooks the collision
+        /// data once per unique mesh, not per instance, so a hundred track pieces cost one cooking.
+        /// The parts that are actually heavy are the bricks (8k-22k triangles), and a brick is a box.
+        /// The channels are the cheap ones: 2-5k triangles for the straight and curved track.
+        ///
+        /// Approximating a trough out of boxes was the alternative, and it would have been both more
+        /// code and less accurate at exactly the thing the game is about - how a marble rolls.
+        /// </summary>
+        static void AddColliders(GameObject go, PlacedPart part)
+        {
+            PartDefinition def = part.Definition;
+
+            // A tunnelled part needs its real geometry too: a bridge modelled as a solid box
+            // walls in the very ball it is meant to arch over.
+            if ((def.ports is { Length: > 0 } || def.hasTunnel) && def.mesh != null)
+            {
+                var channel = go.AddComponent<MeshCollider>();
+                channel.sharedMesh = def.mesh;
+                channel.convex = false; // static, so concave is fine and the trough survives
+                return;
+            }
+
+            if (def.topStuds is { Length: > 0 })
+            {
+                // Body plus studs, so a marble that leaves the track rides the bumps rather than a
+                // flat lid. One shared mesh per part type, not per instance.
+                var studded = go.AddComponent<MeshCollider>();
+                studded.sharedMesh = BrickColliderBuilder.For(def);
+                studded.convex = false;
+                return;
+            }
+
+            AddFootprintColliders(go, part);
+        }
+
+        /// <summary>
+        /// Box colliders sized from the grid, for parts a marble only ever rolls across the top of.
         ///
         /// A solid rectangular footprint collapses to a single box. Anything else - u_turn's open
         /// middle, for instance - gets one box per occupied cell, so the hole stays a hole instead of
         /// becoming a wall the player cannot click through.
         /// </summary>
-        static void AddColliders(GameObject go, PlacedPart part)
+        static void AddFootprintColliders(GameObject go, PlacedPart part)
         {
             PartDefinition def = part.Definition;
             Vector2Int size = def.footprintSize;
