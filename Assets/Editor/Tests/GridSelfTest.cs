@@ -387,10 +387,16 @@ namespace BlockMarbleRun.EditorTools.Tests
             List<PlacedPart> supports = ScaffoldBuilder.BuildSupports(map, joined, pillar);
             Check("its far end is still propped", supports.Count > 0, $"got {supports.Count}");
 
-            // slide_2x4 is solid to its base, so the pillar stops at the part's underside; it cannot
-            // reach the raised mouth without occupying the part itself.
-            Check("a pillar reaches the far end", map.ColumnRestLayer(0, 4) == 2,
-                $"rest layer {map.ColumnRestLayer(0, 4)}");
+            // The pillar straddles the far mouth: the slide's last cell is y=5, so the brick spans
+            // y 5-6. slide_2x4 is solid to its base, so the pillar stops at the part's underside
+            // rather than reaching the raised mouth, which it could only do by occupying the part.
+            Check("a pillar reaches the far end", map.ColumnRestLayer(0, 5) == 2,
+                $"rest layer {map.ColumnRestLayer(0, 5)}");
+
+            // The outer half projects past the mouth, leaving studs already standing at the right
+            // height for whatever continues the run.
+            Check("the outer half is left ready for the next piece", map.ColumnRestLayer(0, 6) == 2,
+                $"rest layer {map.ColumnRestLayer(0, 6)}");
         }
 
         /// <summary>

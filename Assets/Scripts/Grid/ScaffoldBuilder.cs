@@ -78,33 +78,44 @@ namespace BlockMarbleRun.Grid
         }
 
         /// <summary>
-        /// Pillars stand under the channel mouths, each rising to the height of the mouth it carries.
+        /// Pillars stand <em>astride</em> each channel mouth, each rising to the height of the mouth
+        /// it carries: half the brick under the channel's end, half projecting past it.
         ///
-        /// Using the footprint's corners instead put bricks under the whole square of a curve - most
-        /// of which is empty arc that needs nothing - while still leaving the raised end of a slide
-        /// curve a layer short, because every pillar was sized to the part's base rather than to the
-        /// channel above it. The ends are what a channel actually rests on, and a descending part's
-        /// two ends sit at different heights by design.
+        /// That outer half is the point. It leaves two studs already standing at the right height for
+        /// whatever continues the run, so extending a track does not need a second pillar built by
+        /// hand under the joint.
+        ///
+        /// It also avoids a clash. Tucking the whole brick under the part meant reaching cells further
+        /// in, and on a descending piece such as slide_curve_4x4 those are exactly where the ramp
+        /// comes down to meet its base - so the pillar fouled the very part it was carrying. Only the
+        /// end cell at the mouth needs to be clear, and on a channel end it always is.
+        ///
+        /// Corners were the earlier choice and were wrong twice over: they put bricks under the whole
+        /// square of a curve, most of which is empty arc needing nothing, while still leaving a slide
+        /// curve's raised end a layer short because every pillar was sized to the part's base rather
+        /// than to the channel above it.
         /// </summary>
         static IEnumerable<(Vector2Int anchor, int topLayer)> ChoosePillarAnchors(PlacedPart part, PartDefinition pillar)
         {
-            Vector2Int step = pillar.footprintSize;
             var seen = new HashSet<Vector2Int>();
 
             foreach (PlacedPart.WorldPort port in part.WorldPorts())
             {
-                // Take the cells just inside the mouth and back the pillar's footprint up over them,
-                // so a 2x2 brick sits squarely under the channel end rather than half off it.
-                var min = new Vector2Int(int.MaxValue, int.MaxValue);
-                foreach (Vector2Int cell in port.InsideCells())
-                    min = Vector2Int.Min(min, cell);
+                bool alongX = port.Facing is Facing.North or Facing.South;
 
-                if (min.x == int.MaxValue)
-                    continue;
+                int centreAlong = (alongX ? port.MidlineHalfStuds.x : port.MidlineHalfStuds.y) / 2;
+                int across = (alongX ? port.MidlineHalfStuds.y : port.MidlineHalfStuds.x) / 2;
 
-                var anchor = new Vector2Int(
-                    port.Facing == Facing.East ? min.x - (step.x - 1) : min.x,
-                    port.Facing == Facing.North ? min.y - (step.y - 1) : min.y);
+                // The mouth is centred on a stud boundary, so it spans half its width either side.
+                int alongMin = centreAlong - Mathf.Max(1, port.WidthStuds) / 2;
+
+                // The boundary line sits at `across`, so the two cell rows straddling it are
+                // across-1 and across - one inside the part, one out, whichever way the mouth faces.
+                int acrossMin = across - 1;
+
+                Vector2Int anchor = alongX
+                    ? new Vector2Int(alongMin, acrossMin)
+                    : new Vector2Int(acrossMin, alongMin);
 
                 if (seen.Add(anchor))
                     yield return (anchor, port.FloorLayer);
