@@ -22,6 +22,9 @@ namespace BlockMarbleRun.Play
         [Tooltip("Concurrent marbles. WebGL runs physics on one thread, so this is a real budget (DESIGN.md §0.1).")]
         public int maxMarbles = 16;
 
+        [Tooltip("Rolling, impact and splash sounds. Off makes every ball silent.")]
+        public bool sound = true;
+
         [Tooltip("Below this height a marble has left the build and is despawned.")]
         public float killHeight = -1f;
 
@@ -338,6 +341,11 @@ namespace BlockMarbleRun.Play
 
             var marble = go.AddComponent<Marble>();
             marble.Configure(type, PhysicsFor(type));
+
+            // Added before the launch, so a ball released straight into water is heard going in.
+            if (sound)
+                go.AddComponent<MarbleAudio>();
+
             marble.Launch(position);
 
             _marbles.Add(marble);

@@ -34,6 +34,21 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             Material highlightMaterial = EnsureMaterial("Highlight", "Universal Render Pipeline/Lit", opaque: true);
             Material markerMaterial = EnsureMaterial("PortMarker", "Universal Render Pipeline/Unlit", opaque: true);
 
+            Material sandMaterial = EnsureMaterial("Sand", "Universal Render Pipeline/Lit", opaque: true);
+            sandMaterial.SetTexture("_BaseMap", EnsureSandTexture());
+            // 600 units of quad divided into tiles the ground's follow can step by exactly.
+            sandMaterial.SetTextureScale("_BaseMap", Vector2.one * (600f / Scenery.SandTileUnits));
+            sandMaterial.SetColor("_BaseColor", new Color(0.93f, 0.86f, 0.68f));
+            sandMaterial.SetFloat("_Smoothness", 0.08f);
+
+            Material waterMaterial = EnsureMaterial("Water", "Universal Render Pipeline/Lit", opaque: false);
+            waterMaterial.SetColor("_BaseColor", new Color(0.20f, 0.52f, 0.62f, 0.55f));
+            waterMaterial.SetFloat("_Smoothness", 0.95f);
+            waterMaterial.SetFloat("_Metallic", 0.1f);
+
+            Material dropletMaterial = EnsureMaterial("Droplet", "Universal Render Pipeline/Unlit", opaque: false);
+            dropletMaterial.SetColor("_BaseColor", new Color(0.78f, 0.92f, 1f, 0.85f));
+
             Material startMaterial = EnsureMaterial("RoleStart", "Universal Render Pipeline/Lit", opaque: true);
             startMaterial.SetColor("_BaseColor", new Color(0.25f, 0.85f, 0.35f));
             Material goalMaterial = EnsureMaterial("RoleGoal", "Universal Render Pipeline/Lit", opaque: true);
@@ -56,8 +71,19 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             var cam = cameraGo.GetComponent<Camera>();
 
             CreateLighting();
-            CreateGround(groundMaterial, cam);
+            MeshRenderer groundRenderer = CreateGround(groundMaterial, cam);
             CreatePhysicsFloor();
+
+            var sceneryGo = new GameObject("Scenery");
+            var scenery = sceneryGo.AddComponent<Scenery>();
+            scenery.ground = groundRenderer;
+            scenery.gridMaterial = groundMaterial;
+            scenery.sandMaterial = sandMaterial;
+            scenery.waterMaterial = waterMaterial;
+            scenery.targetCamera = cam;
+
+            var splashGo = new GameObject("Splash");
+            splashGo.AddComponent<Splash>().dropletMaterial = dropletMaterial;
 
             var systems = new GameObject("Systems");
             var partRoot = new GameObject("Parts").transform;
@@ -266,6 +292,15 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
                 // one - it shows how much the channel width is doing.
                 EnsureMarbleType("Small glass", 16.0f, 2.50f, 0.06f, 0.08f, 0.10f,
                     new Color(0.65f, 1.00f, 0.75f), smoothness: 0.95f, metallic: 0.0f),
+
+                // Lighter than water, so these float rather than sink. Nothing in the code decides
+                // that - buoyancy is the weight of the water displaced, so it falls out of the
+                // density alone, and wood settles low while the hollow ball rides high.
+                EnsureMarbleType("Wood", 24.5f, 0.68f, 0.16f, 0.20f, 0.03f,
+                    new Color(0.68f, 0.48f, 0.26f), smoothness: 0.25f, metallic: 0.0f),
+
+                EnsureMarbleType("Hollow", 24.5f, 0.30f, 0.12f, 0.14f, 0.06f,
+                    new Color(0.98f, 0.85f, 0.30f), smoothness: 0.60f, metallic: 0.0f),
             };
 
             AssetDatabase.SaveAssets();
@@ -347,10 +382,14 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             var go = new GameObject("Main Camera") { tag = "MainCamera" };
 
             Camera camera = go.AddComponent<Camera>();
-            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.clearFlags = CameraClearFlags.Skybox;
             camera.backgroundColor = new Color(0.07f, 0.08f, 0.10f);
             camera.nearClipPlane = 0.03f;
             camera.farClipPlane = 200f;
+
+            // Nothing is audible without one, and its absence is silent in every sense: no warning,
+            // no error, just a game with no sound.
+            go.AddComponent<AudioListener>();
 
             go.AddComponent<OrbitCamera>();
             return go;
@@ -366,9 +405,51 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             go.transform.rotation = Quaternion.Euler(48f, 41f, 0f);
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.40f, 0.44f, 0.52f);
-            RenderSettings.ambientEquatorColor = new Color(0.26f, 0.27f, 0.30f);
-            RenderSettings.ambientGroundColor = new Color(0.12f, 0.12f, 0.14f);
+            RenderSettings.ambientSkyColor = new Color(0.52f, 0.60f, 0.72f);
+            RenderSettings.ambientEquatorColor = new Color(0.42f, 0.43f, 0.44f);
+            RenderSettings.ambientGroundColor = new Color(0.22f, 0.20f, 0.17f);
+
+            RenderSettings.sun = light;
+            RenderSettings.skybox = EnsureSky();
+
+            // Exponential squared, and dense enough to close before the far plane at 200. The ground
+            // and the water both end at 300 units; the point of the fog is that neither edge is ever
+            // reached by anything the eye can still resolve.
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogDensity = 0.011f;
+            RenderSettings.fogColor = HorizonColour;
+        }
+
+        /// <summary>
+        /// Colour the world dissolves into. Shared by the fog and the sky's own horizon so the two
+        /// meet without a seam - a fog colour that differs from the sky puts a visible band exactly
+        /// where the ground was supposed to disappear.
+        /// </summary>
+        static readonly Color HorizonColour = new Color(0.66f, 0.72f, 0.78f);
+
+        /// <summary>
+        /// A procedural sky, which is a gradient with a sun in it and costs nothing to store.
+        ///
+        /// Kept as an asset rather than built at runtime so the shader is certainly in the build:
+        /// WebGL strips shaders nothing references, and a stripped skybox renders as the black that
+        /// was there before.
+        /// </summary>
+        static Material EnsureSky()
+        {
+            Material sky = EnsureMaterial("Sky", "Skybox/Procedural", opaque: true);
+            if (sky == null)
+                return null;
+
+            sky.SetFloat("_SunSize", 0.04f);
+            sky.SetFloat("_SunSizeConvergence", 5f);
+            sky.SetFloat("_AtmosphereThickness", 1.1f);
+            sky.SetColor("_SkyTint", new Color(0.55f, 0.66f, 0.80f));
+            sky.SetColor("_GroundColor", HorizonColour);
+            sky.SetFloat("_Exposure", 1.15f);
+
+            EditorUtility.SetDirty(sky);
+            return sky;
         }
 
         /// <summary>Unity's built-in "Ignore Raycast" layer, used here to keep the floor out of picking.</summary>
@@ -395,7 +476,7 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             box.center = new Vector3(0f, -0.5f, 0f); // top face exactly at ground level
         }
 
-        static void CreateGround(Material material, Camera camera)
+        static MeshRenderer CreateGround(Material material, Camera camera)
         {
             GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
@@ -404,11 +485,60 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             // on a world that is meant not to have one.
             Object.DestroyImmediate(ground.GetComponent<Collider>());
 
-            ground.transform.localScale = Vector3.one * 30f; // Unity's plane primitive is 10 units across
+            ground.transform.localScale = Vector3.one * 60f; // Unity's plane primitive is 10 units across
             ground.GetComponent<MeshRenderer>().sharedMaterial = material;
 
             ground.AddComponent<InfiniteGround>().targetCamera = camera;
             EditorUtility.SetDirty(ground);
+
+            return ground.GetComponent<MeshRenderer>();
+        }
+
+        /// <summary>
+        /// Sand, as a texture rather than a flat colour.
+        ///
+        /// A plain brown plane 300 units across reads as a void with a colour: there is nothing in it
+        /// for the eye to measure distance or motion against. Grain at two scales - fine speckle over
+        /// slow drifts - is enough to make it a surface.
+        /// </summary>
+        static Texture2D EnsureSandTexture()
+        {
+            const string path = MaterialFolder + "/SandGrain.asset";
+
+            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (existing != null)
+                return existing;
+
+            const int size = 256;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, mipChain: true)
+            {
+                name = "SandGrain",
+                wrapMode = TextureWrapMode.Repeat,
+            };
+
+            var random = new System.Random(7);
+            var pixels = new Color32[size * size];
+
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float speckle = (float)random.NextDouble();
+
+                // Perlin at two frequencies for the drifts, tiling because the sample coordinates are
+                // whole multiples of the texture width.
+                float drift = Mathf.PerlinNoise(x * 8f / size, y * 8f / size) * 0.6f +
+                              Mathf.PerlinNoise(x * 24f / size, y * 24f / size) * 0.4f;
+
+                float shade = Mathf.Clamp01(0.72f + (drift - 0.5f) * 0.28f + (speckle - 0.5f) * 0.12f);
+
+                pixels[y * size + x] = new Color(shade, shade * 0.94f, shade * 0.76f, 1f);
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            AssetDatabase.CreateAsset(texture, path);
+            return texture;
         }
 
         /// <summary>

@@ -16,6 +16,20 @@ namespace BlockMarbleRun.World
         public Camera targetCamera;
         [SerializeField] float snap = Grid.GridCoord.StudUnits;
 
+        /// <summary>
+        /// The step the follow snaps to. Whatever pattern the ground carries has to repeat over
+        /// exactly this distance, or it slides against the world as the camera moves.
+        ///
+        /// The stud grid is drawn from world position and so does not care. A texture does: its UVs
+        /// are fixed to the quad, so a quad that steps by anything other than a whole tile drags the
+        /// grain along with the camera - which reads as the ground being much closer than it is.
+        /// </summary>
+        public float Snap
+        {
+            get => snap;
+            set => snap = value;
+        }
+
         void LateUpdate()
         {
             Camera cam = targetCamera != null ? targetCamera : Camera.main;

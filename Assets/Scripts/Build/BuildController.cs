@@ -121,6 +121,9 @@ namespace BlockMarbleRun.Build
             }
         }
 
+        /// <summary>Quarter turns applied to a piece that is placed by facing rather than by joint.</summary>
+        public int Rotation => _rotation;
+
         public GridMap Map => _map;
         public Selection Selection => _selection;
         public SaveService Saves => _saves;
@@ -222,10 +225,15 @@ namespace BlockMarbleRun.Build
 
             if (keyboard.rKey.wasPressedThisFrame)
             {
-                // A channel piece is placed by its joint, not its facing: turning it a quarter at a
-                // time is meaningless when the solver re-faces it anyway. Stepping through the joins
-                // it could make is the same gesture aimed at what the player is actually choosing.
-                if (Selected?.ports is { Length: > 0 })
+                // A channel piece beside an open mouth is placed by its joint, not its facing:
+                // turning it a quarter at a time is meaningless when the solver re-faces it anyway,
+                // so R steps through the joins it could make instead.
+                //
+                // Only while there are joins to step through. Away from any mouth the solver falls
+                // back to the player's own facing, and there R was still incrementing a variant that
+                // nothing in that path reads - so a channel piece placed out in the open could not be
+                // turned at all. Bricks were never affected; they have no ports and always rotated.
+                if (Selected?.ports is { Length: > 0 } && VariantCount > 1)
                     _variant++;
                 else
                     _rotation = (_rotation + 1) % 4;

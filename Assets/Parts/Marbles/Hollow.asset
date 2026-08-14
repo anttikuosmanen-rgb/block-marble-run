@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a48abed28001543829893e4916a3bc3d, type: 3}
+  m_Name: Hollow
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Play.MarbleDefinition
+  displayName: Hollow
+  diameterMm: 24.5
+  densityGramsPerCm3: 0.3
+  dynamicFriction: 0.12
+  staticFriction: 0.14
+  bounciness: 0.06
+  angularDamping: 0.02
+  linearDamping: 0
+  contactOffset: 0.002
+  collisionDetection: 2
+  solverIterations: 10
+  solverVelocityIterations: 4
+  colour: {r: 0.98, g: 0.85, b: 0.3, a: 1}
+  smoothness: 0.6
+  metallic: 0

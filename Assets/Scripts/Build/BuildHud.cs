@@ -81,6 +81,33 @@ namespace BlockMarbleRun.Build
             GUILayout.EndArea();
         }
 
+        /// <summary>
+        /// The water level, as a slider along the bottom.
+        ///
+        /// In layers rather than world units, because the thing being decided is how deep the build
+        /// stands in it - "up to the third brick" is the question, and 0.576 is not an answer to it.
+        /// Bricks and track ending up underwater is the point, not a case to guard against.
+        /// </summary>
+        void DrawWaterPanel()
+        {
+            BlockMarbleRun.World.Scenery scenery = BlockMarbleRun.World.Scenery.Active;
+            if (scenery == null || !scenery.HasWater)
+                return;
+
+            const float width = 380f;
+            GUILayout.BeginArea(new Rect((Screen.width - width) * 0.5f, Screen.height - 62f, width, 54f));
+
+            GUILayout.Label($"Water level {scenery.WaterLayers:0.0} layers   ({scenery.waterLevel:0.000} units)",
+                            _style);
+
+            float layers = GUILayout.HorizontalSlider(scenery.WaterLayers, 0f, 20f);
+
+            if (!Mathf.Approximately(layers, scenery.WaterLayers))
+                scenery.WaterLayers = layers;
+
+            GUILayout.EndArea();
+        }
+
         void OnGUI()
         {
             if (controller == null)
@@ -106,6 +133,7 @@ namespace BlockMarbleRun.Build
             {
                 DrawPlay();
                 GUILayout.EndArea();
+                DrawWaterPanel();
                 return;
             }
 
@@ -139,7 +167,7 @@ namespace BlockMarbleRun.Build
             GUILayout.Label(
                 controller.VariantCount > 1
                     ? $"R cycles joins ({controller.VariantIndex + 1}/{controller.VariantCount})    C colour    X mark start/goal"
-                    : "Q / E part    R rotate    C colour    X mark start/goal", _style);
+                    : $"Q / E part    R rotate ({controller.Rotation * 90}°)    C colour    X mark start/goal", _style);
 
             if (controller.GrowthLayers > 0)
                 GUILayout.Label($"Click to lift the build {controller.GrowthLayers} layer(s) and place here", _style);
@@ -150,7 +178,7 @@ namespace BlockMarbleRun.Build
             GUILayout.Label("S save    L load    + / - raise or lower a structure", _style);
             GUILayout.Label("Right drag orbit    Middle drag pan    Scroll zoom", _style);
             GUILayout.Label("F frame build    Home origin    Cmd+Z undo    Shift+Cmd+Z redo", _style);
-            GUILayout.Label("Tab play mode", _style);
+            GUILayout.Label("Tab play mode    B floor: grid / sand / water", _style);
             GUILayout.Label("Stress: T palette-mat   Y property-block(old)   U palette+sparse   G clear   K reset worst", _style);
 
             // Deliberately in the building HUD and not the physics panel. Scaffolding is decided when
@@ -162,6 +190,7 @@ namespace BlockMarbleRun.Build
             GUILayout.EndArea();
 
             DrawScaffoldLog(top);
+            DrawWaterPanel();
 
             DrawSelectionBox();
         }
@@ -206,7 +235,7 @@ namespace BlockMarbleRun.Build
 
             GUILayout.Space(6);
             GUILayout.Label("Space release from starts    Left click drop a ball    M change ball", _style);
-            GUILayout.Label("R reset    Tab back to building    P physics panel", _style);
+            GUILayout.Label("R reset    Tab back to building    P physics panel    B floor", _style);
         }
 
         void DrawSelectionBox()

@@ -41,6 +41,7 @@ Shader "Block Marble Run/Infinite Stud Grid"
             {
                 float4 positionCS : SV_POSITION;
                 float3 positionWS : TEXCOORD0;
+                float  fogCoord   : TEXCOORD1;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
@@ -65,6 +66,10 @@ Shader "Block Marble Run/Infinite Stud Grid"
                 VertexPositionInputs positions = GetVertexPositionInputs(input.positionOS.xyz);
                 output.positionCS = positions.positionCS;
                 output.positionWS = positions.positionWS;
+
+                // Without this the grid stays crisp all the way to its own edge while everything
+                // around it fades, and the edge is exactly what the fog is there to hide.
+                output.fogCoord = ComputeFogFactor(positions.positionCS.z);
                 return output;
             }
 
@@ -104,6 +109,8 @@ Shader "Block Marble Run/Infinite Stud Grid"
                 float viewDistance = length(input.positionWS - _WorldSpaceCameraPos);
                 float fade = saturate((viewDistance - _FadeStart) / max(_FadeEnd - _FadeStart, 1e-3));
                 color = lerp(color, _BaseColor, fade);
+
+                color.rgb = MixFog(color.rgb, input.fogCoord);
 
                 return color;
             }
