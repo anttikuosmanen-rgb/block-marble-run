@@ -25,6 +25,7 @@ namespace BlockMarbleRun.Build
         public GhostPreview ghost;
         public Transform partRoot;
         public Material highlightMaterial;
+        public PartPalette palette;
 
         readonly GridMap _map = new();
         readonly CommandStack _history = new();
@@ -33,12 +34,92 @@ namespace BlockMarbleRun.Build
         int _rotation;
         byte _colorIndex;
 
+        /// <summary>Which of the ranked placements the player has stepped to with R.</summary>
+        int _variant;
+        GridCoord _variantCell;
+
+        /// <summary>How far from the cursor an open mouth still counts as the one being aimed at.</summary>
+        const float MouthSearchRange = 0.55f;
+
+        // Precise mode: the placement is frozen and slid by whole studs from where it was locked.
+        bool _precise;
+        PlacedPart _lockedPlacement;
+        GridCoord _lockedCursor;
+
         Selection _selection;
         SaveService _saves;
 
         bool _boxSelecting;
         Vector2 _boxStart;
         Vector2 _boxEnd;
+
+        /// <summary>What a left click does. Placing is the default; grabbing picks pieces instead.</summary>
+        public enum Tool
+        {
+            Place,
+            Grab,
+            Paint,
+        }
+
+        public Tool CurrentTool { get; private set; } = Tool.Place;
+
+        public void SetTool(Tool tool)
+        {
+            CurrentTool = tool;
+            if (tool != Tool.Place)
+                ghost.Hide();
+        }
+
+        public int SelectedIndex => _partIndex;
+
+        public void SelectPart(int index)
+        {
+            int count = CatalogPartCount;
+            if (count == 0)
+                return;
+
+            _partIndex = ((index % count) + count) % count;
+            _variant = 0;
+            FaceLastPlaced();
+        }
+
+        PlacedPart _lastPlaced;
+
+        /// <summary>
+        /// Turns the newly chosen piece to meet the last one placed.
+        ///
+        /// The solver already re-faces a piece once the cursor is beside an open mouth, but until
+        /// then the ghost carries whatever rotation the previous piece happened to leave behind - so
+        /// picking a curve mid-run shows it pointing the wrong way and invites a pointless press of R.
+        /// </summary>
+        void FaceLastPlaced()
+        {
+            PartDefinition def = Selected;
+            if (_lastPlaced == null || def?.ports == null || def.ports.Length == 0)
+                return;
+
+            foreach (PlacedPart.WorldPort open in _lastPlaced.WorldPorts())
+            {
+                if (_map.FindConnection(_lastPlaced, open) != null)
+                    continue; // already joined; not somewhere the next piece can go
+
+                Facing wanted = PlacedPart.WorldPort.Opposite(open.Facing);
+
+                for (int rotation = 0; rotation < 4; rotation++)
+                {
+                    var probe = new PlacedPart(def, new GridCoord(0, 0, 0), rotation, _colorIndex);
+
+                    foreach (PlacedPart.WorldPort port in probe.WorldPorts())
+                    {
+                        if (port.Facing != wanted)
+                            continue;
+
+                        _rotation = rotation;
+                        return;
+                    }
+                }
+            }
+        }
 
         public GridMap Map => _map;
         public Selection Selection => _selection;
@@ -90,10 +171,12 @@ namespace BlockMarbleRun.Build
             if (mouse == null || keyboard == null)
                 return false;
 
-            bool shift = keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed;
+            // Dragging in the grab tool, rather than shift-dragging while placing: shift now holds a
+            // placement steady, and one key cannot mean both without one of them losing.
+            bool selecting = CurrentTool == Tool.Grab;
             Vector2 screen = mouse.position.ReadValue();
 
-            if (!_boxSelecting && shift && mouse.leftButton.wasPressedThisFrame)
+            if (!_boxSelecting && selecting && mouse.leftButton.wasPressedThisFrame)
             {
                 _boxSelecting = true;
                 _boxStart = screen;
@@ -113,13 +196,15 @@ namespace BlockMarbleRun.Build
 
                 Rect rect = RectFrom(_boxStart, _boxEnd);
 
-                // A click without a drag means "clear", not "select nothing in a zero-width box".
+                // A click without a drag picks the one piece under the cursor; a real drag selects a
+                // region. Treating a click as an empty box would clear the selection on every stray tap.
                 if (rect.width < 4f && rect.height < 4f)
-                    _selection.Clear();
+                    GrabUnderCursor(screen);
                 else
                     _selection.SelectInScreenRect(_map, raycaster.Camera, rect, additive: false);
 
-                Status = _selection.Count > 0 ? $"Selected {_selection.Count}" : "Selection cleared";
+                if (rect.width >= 4f || rect.height >= 4f)
+                    Status = _selection.Count > 0 ? $"Selected {_selection.Count}" : "Selection cleared";
             }
 
             return true;
@@ -136,7 +221,20 @@ namespace BlockMarbleRun.Build
                 return;
 
             if (keyboard.rKey.wasPressedThisFrame)
-                _rotation = (_rotation + 1) % 4;
+            {
+                // A channel piece is placed by its joint, not its facing: turning it a quarter at a
+                // time is meaningless when the solver re-faces it anyway. Stepping through the joins
+                // it could make is the same gesture aimed at what the player is actually choosing.
+                if (Selected?.ports is { Length: > 0 })
+                    _variant++;
+                else
+                    _rotation = (_rotation + 1) % 4;
+
+                // Holding a placement steady should not mean giving up the ability to turn it. The
+                // lock is rebuilt around the new choice, keeping wherever the piece has been slid to.
+                if (_precise)
+                    RelockAfterTurn();
+            }
 
             if (keyboard.cKey.wasPressedThisFrame)
                 _colorIndex = (byte)((_colorIndex + 1) % Mathf.Max(1, factory.Catalog.palette.Length));
@@ -179,6 +277,12 @@ namespace BlockMarbleRun.Build
 
             if (keyboard.xKey.wasPressedThisFrame)
                 CycleRoleUnderCursor();
+
+            if (keyboard.vKey.wasPressedThisFrame)
+                SetTool(CurrentTool == Tool.Place ? Tool.Grab : Tool.Place);
+
+            if (keyboard.bKey.wasPressedThisFrame)
+                SetTool(CurrentTool == Tool.Paint ? Tool.Place : Tool.Paint);
         }
 
         /// <summary>
@@ -224,6 +328,66 @@ namespace BlockMarbleRun.Build
             if (renderer != null)
                 renderer.sharedMaterial = factory.MaterialFor(part);
         }
+
+        /// <summary>
+        /// Picks the piece under the cursor into the selection, so it can be deleted, inspected or
+        /// added to. Holding shift adds rather than replaces, matching the box-select behaviour.
+        /// </summary>
+        void GrabUnderCursor(Vector2 screen)
+        {
+            BuildHit hit = raycaster.RaycastPick(screen);
+            if (!hit.Valid || hit.Collider == null)
+            {
+                _selection.Clear();
+                Status = "Nothing there";
+                return;
+            }
+
+            var marker = hit.Collider.GetComponentInParent<PlacedPartMarker>();
+            if (marker == null)
+                return;
+
+            Keyboard keyboard = Keyboard.current;
+            bool add = keyboard != null && (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed);
+
+            if (!add)
+                _selection.Clear();
+
+            _selection.Add(marker.Part);
+            Status = $"Grabbed {marker.Part.Definition.displayName} ({_selection.Count} selected)";
+        }
+
+        PlacedPart _lastPainted;
+
+        void PaintUnderCursor(Vector2 screen)
+        {
+            BuildHit hit = raycaster.RaycastPick(screen);
+            if (!hit.Valid || hit.Collider == null)
+                return;
+
+            var marker = hit.Collider.GetComponentInParent<PlacedPartMarker>();
+            if (marker == null || marker.Part.ColorIndex == _colorIndex)
+                return;
+
+            // One history entry per piece, but never two for the same piece in a row: a brush held
+            // still over one brick would otherwise fill the undo stack with no-ops.
+            if (ReferenceEquals(marker.Part, _lastPainted))
+                return;
+
+            _lastPainted = marker.Part;
+
+            if (_history.Execute(new PaintCommand(new[] { marker.Part }, _colorIndex, RefreshMaterial)))
+                Status = $"Painted {marker.Part.Definition.displayName}";
+        }
+
+        /// <summary>Sets the brush colour, and switches to painting so the choice does something.</summary>
+        public void SelectColour(byte index)
+        {
+            _colorIndex = index;
+            SetTool(Tool.Paint);
+        }
+
+        public byte ColourIndex => _colorIndex;
 
         void DeleteSelection()
         {
@@ -346,6 +510,8 @@ namespace BlockMarbleRun.Build
         {
             int count = factory.Catalog.parts.Count;
             _partIndex = ((_partIndex + step) % count + count) % count;
+            _variant = 0;
+            FaceLastPlaced();
         }
 
         void UpdatePreviewAndPlacement()
@@ -355,6 +521,13 @@ namespace BlockMarbleRun.Build
                 return;
 
             Vector2 screen = mouse.position.ReadValue();
+
+            // The palette sits over the world, and a click on it must not also land in the world.
+            if (palette != null && palette.Covers(screen))
+            {
+                ghost.Hide();
+                return;
+            }
 
             // Orbiting and panning should not scrub a ghost across the world.
             if (mouse.rightButton.isPressed || mouse.middleButton.isPressed)
@@ -374,6 +547,23 @@ namespace BlockMarbleRun.Build
                 return;
             }
 
+            if (CurrentTool == Tool.Grab)
+            {
+                ghost.Hide();
+                return; // handled by the box-select pass, which also picks on a click
+            }
+
+            if (CurrentTool == Tool.Paint)
+            {
+                ghost.Hide();
+
+                // Held, not just pressed, so a colour can be brushed across several pieces.
+                if (mouse.leftButton.isPressed)
+                    PaintUnderCursor(screen);
+
+                return;
+            }
+
             BuildHit hit = raycaster.RaycastPlacement(screen);
             if (!hit.Valid)
             {
@@ -381,19 +571,33 @@ namespace BlockMarbleRun.Build
                 return;
             }
 
+            Keyboard keys = Keyboard.current;
+            bool wantsPrecise = keys != null && (keys.leftShiftKey.isPressed || keys.rightShiftKey.isPressed);
+
             PlacedPart candidate = CandidateAt(hit.Cell);
+            UpdatePreciseLock(wantsPrecise, candidate, hit.Cell);
+
+            // Re-solve once locked, so the first frame of precise mode already follows the lock.
+            if (_precise)
+                candidate = CandidateAt(hit.Cell);
+
             PlacementResult result = _map.CanPlace(candidate);
 
             ghost.Show(candidate, result, factory.Catalog.ColorAt(_colorIndex));
 
             // Unsupported is placeable, not refused: the piece gets pillars built under it. Only a
-            // genuine collision blocks placement.
+            // genuine collision blocks placement, in precise mode as much as out of it.
             if (mouse.leftButton.wasPressedThisFrame && result != PlacementResult.Blocked)
             {
                 var command = new PlaceWithSupportsCommand(_map, candidate, PillarDefinition, Spawn);
 
-                if (_history.Execute(command) && command.SupportCount > 0)
-                    Status = $"Placed with {command.SupportCount} support brick(s)";
+                if (_history.Execute(command))
+                {
+                    _lastPlaced = candidate;
+
+                    if (command.SupportCount > 0)
+                        Status = $"Placed with {command.SupportCount} support brick(s)";
+                }
             }
         }
 
@@ -418,7 +622,113 @@ namespace BlockMarbleRun.Build
             int anchorX = cursorCell.x - (size.x - 1) / 2;
             int anchorY = cursorCell.y - (size.y - 1) / 2;
 
+            if (_precise && _lockedPlacement != null)
+                return SlideLocked(cursorCell);
+
+            // Moving the cursor starts again from the best placement. Carrying the choice across the
+            // build meant that one press of R left every later placement showing a worse alternative
+            // - the snapping looked broken when it was only being overruled.
+            if (cursorCell.x != _variantCell.x || cursorCell.y != _variantCell.y)
+            {
+                _variantCell = cursorCell;
+                _variant = 0;
+            }
+
+            // Cycling only makes sense against a joint. With an open mouth nearby, the alternatives
+            // are this piece's own mouths meeting it; with none, there is nothing to choose between.
+            if (def.ports is { Length: > 1 } &&
+                PlacementSolver.NearestOpenMouth(_map, cursorCell.CellCentre, MouthSearchRange, out PlacedPart.WorldPort target))
+            {
+                List<PlacedPart> matings = PlacementSolver.MatingsWith(_map, def, _colorIndex, target);
+
+                if (matings.Count > 0)
+                {
+                    _variant = ((_variant % matings.Count) + matings.Count) % matings.Count;
+                    VariantCount = matings.Count;
+                    return matings[_variant];
+                }
+            }
+
+            VariantCount = 1;
             return PlacementSolver.Solve(_map, def, anchorX, anchorY, _rotation, _colorIndex);
+        }
+
+        /// <summary>How many placements the current position offers, for the HUD.</summary>
+        public int VariantCount { get; private set; }
+
+        public int VariantIndex => _variant;
+        public bool Precise => _precise;
+
+        /// <summary>
+        /// Moves the locked placement by whole studs, following the cursor.
+        ///
+        /// Keeps the rotation and height the player accepted and gives them the position back, which
+        /// the snapping otherwise decides for them. Only overlap is refused here - a piece that hangs
+        /// unsupported is a legitimate thing to want, and the scaffolding will carry it.
+        /// </summary>
+        PlacedPart SlideLocked(GridCoord cursorCell)
+        {
+            GridCoord origin = _lockedPlacement.Origin;
+
+            var moved = new GridCoord(
+                origin.x + (cursorCell.x - _lockedCursor.x),
+                origin.y + (cursorCell.y - _lockedCursor.y),
+                origin.layer);
+
+            // Fold the movement into the lock so R can re-solve from where the piece actually is.
+            _lockedPlacement = new PlacedPart(_lockedPlacement.Definition, moved,
+                _lockedPlacement.Rotation, _colorIndex);
+            _lockedCursor = cursorCell;
+
+            return _lockedPlacement;
+        }
+
+        /// <summary>
+        /// Rebuilds the lock after R, so shift and R compose.
+        ///
+        /// The piece keeps the position it has been slid to; only its facing or its choice of join
+        /// changes. Re-solving from the slid position rather than the original cursor is what stops
+        /// it jumping back to where the lock was first taken.
+        /// </summary>
+        void RelockAfterTurn()
+        {
+            if (_lockedPlacement == null)
+                return;
+
+            GridCoord at = _lockedPlacement.Origin;
+            PartDefinition def = _lockedPlacement.Definition;
+
+            if (def.ports is { Length: > 0 })
+            {
+                List<PlacedPart> ranked = PlacementSolver.SolveRanked(_map, def, at.x, at.y, _rotation, _colorIndex);
+                if (ranked.Count > 0)
+                {
+                    _variant = ((_variant % ranked.Count) + ranked.Count) % ranked.Count;
+                    _lockedPlacement = ranked[_variant];
+                    VariantCount = ranked.Count;
+                    return;
+                }
+            }
+
+            _lockedPlacement = new PlacedPart(def, at, _rotation, _colorIndex);
+        }
+
+        void UpdatePreciseLock(bool wanted, PlacedPart candidate, GridCoord cursorCell)
+        {
+            if (wanted && !_precise && candidate != null)
+            {
+                // Locked from whatever was on screen when the key went down, so the placement the
+                // player was looking at is the one they keep.
+                _precise = true;
+                _lockedPlacement = candidate;
+                _lockedCursor = cursorCell;
+                Status = "Precise placement - slide with the mouse";
+            }
+            else if (!wanted && _precise)
+            {
+                _precise = false;
+                _lockedPlacement = null;
+            }
         }
 
         void TryDelete(Vector2 screen)

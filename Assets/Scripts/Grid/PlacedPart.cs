@@ -17,7 +17,8 @@ namespace BlockMarbleRun.Grid
         /// <summary>Yaw in 90-degree steps, 0-3.</summary>
         public readonly int Rotation;
 
-        public readonly byte ColorIndex;
+        /// <summary>Mutable, like Role: a piece can be repainted after it is placed.</summary>
+        public byte ColorIndex;
 
         public GameObject Instance;
 

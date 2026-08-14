@@ -13,8 +13,10 @@ namespace BlockMarbleRun.Build
         public BuildController controller;
         public StressTest stressTest;
         public BlockMarbleRun.Track.OpenPortMarkers markers;
+        public BlockMarbleRun.Track.JointBridges joints;
         public BlockMarbleRun.Play.PlayController play;
         public BlockMarbleRun.Core.GameMode mode;
+        public PartPalette palette;
 
         GUIStyle _style;
 
@@ -22,6 +24,7 @@ namespace BlockMarbleRun.Build
         // and the spikes that matter show up in the worst-frame figure instead.
         float _smoothedMs;
         float _worstMs;
+        BlockMarbleRun.Core.Mode _lastMode;
 
         void Awake()
         {
@@ -34,11 +37,19 @@ namespace BlockMarbleRun.Build
             float ms = Time.unscaledDeltaTime * 1000f;
             _smoothedMs = _smoothedMs <= 0f ? ms : Mathf.Lerp(_smoothedMs, ms, 0.05f);
 
-            // Ignore the first frames, where load hitches would poison the worst-case reading.
-            if (Time.frameCount > 60)
+            // Ignore the first second, and anything absurd: a tab-switch or an asset load stalls the
+            // main thread for seconds, and one of those leaves the worst-frame figure permanently
+            // reading a number that has nothing to do with the build.
+            if (Time.unscaledTime > 1f && ms < 500f)
                 _worstMs = Mathf.Max(_worstMs, ms);
 
-            if (Keyboard.current != null && Keyboard.current.bKey.wasPressedThisFrame)
+            if (mode != null && mode.Current != _lastMode)
+            {
+                _lastMode = mode.Current;
+                _worstMs = 0f;
+            }
+
+            if (Keyboard.current != null && Keyboard.current.kKey.wasPressedThisFrame)
                 _worstMs = 0f;
         }
 
@@ -55,7 +66,9 @@ namespace BlockMarbleRun.Build
 
             bool playing = mode != null && mode.Current == BlockMarbleRun.Core.Mode.Play;
 
-            GUILayout.BeginArea(new Rect(12, 12, 640, 300));
+            // Start below the palette bar, which draws itself first and knows its own height.
+            float top = 12f + (palette != null ? palette.Height : 0f);
+            GUILayout.BeginArea(new Rect(12, top, 640, 300));
 
             if (playing)
             {
@@ -85,19 +98,25 @@ namespace BlockMarbleRun.Build
                 $"Slot: {controller.SlotName}", _style);
 
             if (markers != null)
-                GUILayout.Label($"Open channel ends: {markers.OpenCount}", _style);
+                GUILayout.Label($"Open channel ends: {markers.OpenCount}" + (joints != null ? $"   bridged joints: {joints.Count}" : ""), _style);
 
             if (!string.IsNullOrEmpty(controller.Status))
                 GUILayout.Label(controller.Status, _style);
 
             GUILayout.Space(6);
-            GUILayout.Label("Q / E part    R rotate    C colour    X mark start/goal", _style);
-            GUILayout.Label("Left click place    Alt + click delete    Shift + drag select    Del delete selection", _style);
+            GUILayout.Label(
+                controller.VariantCount > 1
+                    ? $"R cycles joins ({controller.VariantIndex + 1}/{controller.VariantCount})    C colour    X mark start/goal"
+                    : "Q / E part    R rotate    C colour    X mark start/goal", _style);
+
+            if (controller.Precise)
+                GUILayout.Label("PRECISE - sliding stud by stud, R still turns / cycles joins", _style);
+            GUILayout.Label("Left click place    Shift precise    V grab (click picks, drag selects)    Del remove", _style);
             GUILayout.Label("S save    L load", _style);
             GUILayout.Label("Right drag orbit    Middle drag pan    Scroll zoom", _style);
             GUILayout.Label("F frame build    Home origin    Cmd+Z undo    Shift+Cmd+Z redo", _style);
             GUILayout.Label("Tab play mode", _style);
-            GUILayout.Label("Stress: T palette-mat   Y property-block(old)   U palette+sparse   G clear   B reset worst", _style);
+            GUILayout.Label("Stress: T palette-mat   Y property-block(old)   U palette+sparse   G clear   K reset worst", _style);
             GUILayout.EndArea();
 
             DrawSelectionBox();
@@ -121,6 +140,15 @@ namespace BlockMarbleRun.Build
             if (!float.IsPositiveInfinity(play.BestSeconds))
                 GUILayout.Label($"Best run: {play.BestSeconds:0.00} s", _style);
 
+            GUILayout.Label(
+                $"Speed: {BlockMarbleRun.Play.PlayController.ToMetresPerSecond(play.FastestSpeed):0.00} m/s   " +
+                $"peak {BlockMarbleRun.Play.PlayController.ToMetresPerSecond(play.PeakSpeed):0.00} m/s   " +
+                $"could climb {play.ClimbableLayers:0.0} layers", _style);
+
+            GUILayout.Label(
+                $"Energy kept: {play.EfficiencyPercent:0} % of the drop   " +
+                $"contacts: {play.ContactRate:0}/s", _style);
+
             GUILayout.Space(6);
             if (play.CurrentType != null)
             {
@@ -134,7 +162,7 @@ namespace BlockMarbleRun.Build
 
             GUILayout.Space(6);
             GUILayout.Label("Space release from starts    Left click drop a ball    M change ball", _style);
-            GUILayout.Label("R reset    Tab back to building", _style);
+            GUILayout.Label("R reset    Tab back to building    P physics panel", _style);
         }
 
         void DrawSelectionBox()

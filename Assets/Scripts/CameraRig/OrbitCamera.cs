@@ -20,7 +20,10 @@ namespace BlockMarbleRun.CameraRig
         [Header("Limits")]
         [SerializeField] float minPitch = 5f;
         [SerializeField] float maxPitch = 85f;
-        [SerializeField] float minDistance = 0.4f;
+        // A part is 3.2 cm across and the near plane sits at 3 mm, so anything closer than this lets
+        // the camera inside the geometry - where you see the underside tubes through the shell and it
+        // looks like the model is faulty.
+        [SerializeField] float minDistance = 0.75f;
         [SerializeField] float maxDistance = 60f;
 
         [Header("Sensitivity")]

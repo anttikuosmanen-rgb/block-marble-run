@@ -66,6 +66,9 @@ namespace BlockMarbleRun.EditorTools.Import
                 // Mirroring across X reflects the centre line about the footprint's mid-plane, in the
                 // same half-stud units the port is stored in.
                 p.midlineHalfStuds = new Vector2Int(size.x * 2 - p.midlineHalfStuds.x, p.midlineHalfStuds.y);
+                if (p.profileMm != null)
+                    System.Array.Reverse(p.profileMm = (float[])p.profileMm.Clone());
+
                 p.facing = MirrorFacing(p.facing);
                 flipped[i] = p;
             }

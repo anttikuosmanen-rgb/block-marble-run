@@ -17,7 +17,13 @@ MonoBehaviour:
   densityGramsPerCm3: 2.5
   dynamicFriction: 0.06
   staticFriction: 0.08
-  bounciness: 0.28
+  bounciness: 0.08
+  angularDamping: 0.002
+  linearDamping: 0
+  contactOffset: 0.002
+  collisionDetection: 2
+  solverIterations: 10
+  solverVelocityIterations: 4
   colour: {r: 0.7, g: 0.9, b: 1, a: 1}
   smoothness: 0.95
   metallic: 0

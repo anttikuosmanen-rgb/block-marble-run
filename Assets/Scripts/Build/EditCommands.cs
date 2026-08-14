@@ -224,6 +224,54 @@ namespace BlockMarbleRun.Build
         }
     }
 
+    /// <summary>
+    /// Repaints pieces. Batched, so painting across a drag undoes in one step rather than one per
+    /// brick touched.
+    /// </summary>
+    public sealed class PaintCommand : IEditCommand
+    {
+        readonly List<PlacedPart> _parts;
+        readonly byte _colour;
+        readonly System.Action<PlacedPart> _refresh;
+
+        byte[] _previous;
+
+        public PaintCommand(IEnumerable<PlacedPart> parts, byte colour, System.Action<PlacedPart> refresh)
+        {
+            _parts = new List<PlacedPart>(parts);
+            _colour = colour;
+            _refresh = refresh;
+        }
+
+        public bool Do()
+        {
+            _previous = new byte[_parts.Count];
+
+            bool changed = false;
+            for (int i = 0; i < _parts.Count; i++)
+            {
+                _previous[i] = _parts[i].ColorIndex;
+                if (_parts[i].ColorIndex == _colour)
+                    continue;
+
+                _parts[i].ColorIndex = _colour;
+                _refresh(_parts[i]);
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        public void Undo()
+        {
+            for (int i = 0; i < _parts.Count; i++)
+            {
+                _parts[i].ColorIndex = _previous[i];
+                _refresh(_parts[i]);
+            }
+        }
+    }
+
     /// <summary>Adds a part to the grid and builds its scene object.</summary>
     public sealed class PlacePartCommand : IEditCommand
     {

@@ -98,9 +98,12 @@ namespace BlockMarbleRun.Grid
         static IEnumerable<(Vector2Int anchor, int topLayer)> ChoosePillarAnchors(PlacedPart part, PartDefinition pillar)
         {
             var seen = new HashSet<Vector2Int>();
+            int mouths = 0;
 
             foreach (PlacedPart.WorldPort port in part.WorldPorts())
             {
+                mouths++;
+
                 bool alongX = port.Facing is Facing.North or Facing.South;
 
                 int centreAlong = (alongX ? port.MidlineHalfStuds.x : port.MidlineHalfStuds.y) / 2;
@@ -118,8 +121,56 @@ namespace BlockMarbleRun.Grid
                     : new Vector2Int(acrossMin, alongMin);
 
                 if (seen.Add(anchor))
-                    yield return (anchor, port.FloorLayer);
+                    yield return (anchor, UndersideLayer(part, anchor, pillar, port.FloorLayer));
             }
+
+            Vector2Int size = part.RotatedSize;
+            Vector2Int step = pillar.footprintSize;
+
+            // A dead end is carried at one end only, so its closed end hangs unsupported. Terminal
+            // pieces are exactly the case: one mouth, and nothing at all under the far half.
+            if (mouths < 2)
+            {
+                var farCorner = new Vector2Int(
+                    part.Origin.x + Mathf.Max(0, size.x - step.x),
+                    part.Origin.y + Mathf.Max(0, size.y - step.y));
+
+                if (seen.Add(farCorner))
+                    yield return (farCorner, part.Origin.layer);
+
+                yield break;
+            }
+
+            // Mid-span propping was tried and removed. A curve fills a diagonal band of its square,
+            // so anchors chosen from the bounding box land beside the arc rather than under it, and a
+            // brick standing next to the piece it is meant to carry is worse than no brick at all.
+            // Doing this properly means following the channel path, which is work the centreline
+            // derivation would make straightforward and guesswork without it.
+        }
+
+        /// <summary>
+        /// The layer the part's own underside sits at above this anchor - where a pillar has to reach.
+        ///
+        /// Taken from the geometry rather than from the mouth's channel height. The two agree on a
+        /// flat piece, but a slide curve's raised end occupies only its upper layer while its channel
+        /// floor sits 6.4 mm higher again, and carrying to the channel rather than to the underside
+        /// leaves the brick a layer short of the thing it is holding up.
+        /// </summary>
+        static int UndersideLayer(PlacedPart part, Vector2Int anchor, PartDefinition pillar, int fallback)
+        {
+            int lowest = int.MaxValue;
+
+            foreach (GridCoord cell in part.OccupiedCells())
+            {
+                // Only the columns this pillar actually stands under.
+                if (cell.x < anchor.x || cell.x >= anchor.x + pillar.footprintSize.x ||
+                    cell.y < anchor.y || cell.y >= anchor.y + pillar.footprintSize.y)
+                    continue;
+
+                lowest = Mathf.Min(lowest, cell.layer);
+            }
+
+            return lowest == int.MaxValue ? fallback : lowest;
         }
 
         /// <summary>

@@ -25,6 +25,9 @@ namespace BlockMarbleRun.Play
         [Tooltip("Below this height a marble has left the build and is despawned.")]
         public float killHeight = -1f;
 
+        [Tooltip("Nudge given to a ball leaving a start, in world units per second. 1 unit is 10 cm.")]
+        public float releaseSpeed = 1.1f;
+
         readonly List<Marble> _marbles = new();
         readonly Dictionary<MarbleDefinition, PhysicsMaterial> _physics = new();
         readonly Dictionary<MarbleDefinition, Material> _renderMaterials = new();
@@ -40,6 +43,37 @@ namespace BlockMarbleRun.Play
         public int Finished { get; private set; }
         public int Lost { get; private set; }
         public float BestSeconds { get; private set; } = float.PositiveInfinity;
+
+        /// <summary>Fastest ball in play right now, in world units per second.</summary>
+        public float FastestSpeed { get; private set; }
+
+        /// <summary>Fastest any ball has gone this run.</summary>
+        public float PeakSpeed { get; private set; }
+
+        /// <summary>
+        /// How many layers the fastest ball could climb on the speed it has, if nothing were lost.
+        ///
+        /// The number that actually settles an argument about a stalling run. A rolling sphere holds
+        /// 7/10 m v² between travel and spin, so this is that energy expressed as height - and
+        /// comparing it against the rise the ball failed to clear says whether the problem is energy
+        /// or geometry. Arriving with three layers in hand and stopping at a one-layer ramp is not a
+        /// physics-tuning problem.
+        /// </summary>
+        public float ClimbableLayers
+        {
+            get
+            {
+                float g = Mathf.Abs(Physics.gravity.y);
+                if (g <= 0f)
+                    return 0f;
+
+                float height = 7f * FastestSpeed * FastestSpeed / (20f * g);
+                return height / GridCoord.LayerUnits;
+            }
+        }
+
+        /// <summary>Metres per second, for a figure that means something outside the project's scale.</summary>
+        public static float ToMetresPerSecond(float unitsPerSecond) => unitsPerSecond * 0.1f;
         public int Alive => _marbles.Count;
 
         void Awake() => _sphereMesh = BuildSphereMesh();
@@ -77,16 +111,34 @@ namespace BlockMarbleRun.Play
             if (mouse != null && mouse.leftButton.wasPressedThisFrame)
             {
                 if (raycaster.RaycastPoint(mouse.position.ReadValue(), out Vector3 point))
-                    Spawn(point + Vector3.up * DropClearance);
+                {
+                    float radius = CurrentType != null ? CurrentType.RadiusUnits : 0.12f;
+                    Spawn(point + Vector3.up * (radius + Clearance));
+                }
             }
 
             Sweep();
+            MeasureSpeeds();
         }
 
         /// <summary>Drops one marble just above each piece marked as a start.</summary>
         public void ReleaseFromStarts()
         {
             int released = 0;
+
+            if (!HasStart())
+            {
+                (PlacedPart part, PlacedPart.WorldPort port) = HighestOpenMouth();
+                if (part != null)
+                {
+                    Marble ball = Spawn(StartPosition(part, port));
+                    if (ball != null)
+                        Nudge(ball, DepartureDirection(part, port));
+
+                    Status = "Released from the highest open channel (no start marked)";
+                    return;
+                }
+            }
 
             foreach (PlacedPart part in build.Map.Parts)
             {
@@ -95,10 +147,11 @@ namespace BlockMarbleRun.Play
 
                 foreach (PlacedPart.WorldPort port in part.WorldPorts())
                 {
-                    // Just inside the mouth and a little above its floor, so the marble drops into
-                    // the channel rather than being born inside the geometry.
-                    Vector3 inward = -port.OutwardDirection * (GridCoord.StudUnits * 0.5f);
-                    Spawn(port.WorldPosition + inward + Vector3.up * DropClearance);
+                    Marble marble = Spawn(StartPosition(part, port));
+
+                    if (marble != null)
+                        Nudge(marble, DepartureDirection(part, port));
+
                     released++;
                     break;
                 }
@@ -109,10 +162,157 @@ namespace BlockMarbleRun.Play
                 : "No start marked - point at a dead-end piece in build mode and press X";
         }
 
-        /// <summary>Enough to clear the surface without dropping the ball from a height.</summary>
-        const float DropClearance = 0.05f;
+        /// <summary>
+        /// Sends a ball out of the start mouth with a small push, varied slightly each time.
+        ///
+        /// Without it a ball dropped into a level start just sits there, since nothing is pushing it
+        /// anywhere. The variation matters as much as the push: identical releases down identical
+        /// track produce identical runs, and a marble run that plays out the same way twice stops
+        /// being worth watching.
+        /// </summary>
+        void Nudge(Marble marble, Vector3 direction)
+        {
+            Vector3 sideways = Vector3.Cross(Vector3.up, direction);
+
+            Vector3 push =
+                direction * Random.Range(0.85f, 1.15f) +
+                sideways * Random.Range(-0.10f, 0.10f);
+
+            marble.Body.linearVelocity = push.normalized * releaseSpeed;
+        }
+
+        /// <summary>
+        /// Which way a ball should leave the start.
+        ///
+        /// Taken from the piece it is joined to rather than from the mouth's own facing. The two
+        /// agree when everything is the right way round, so a disagreement means some part of the
+        /// facing chain is inverted - and aiming at the neighbour is self-correcting either way,
+        /// because the neighbour is where the run demonstrably continues.
+        /// </summary>
+        Vector3 DepartureDirection(PlacedPart start, PlacedPart.WorldPort port)
+        {
+            PlacedPart neighbour = build.Map.FindConnection(start, port);
+            if (neighbour == null)
+                return port.OutwardDirection;
+
+            start.GetTransform(out Vector3 from, out _);
+            neighbour.GetTransform(out Vector3 to, out _);
+
+            Vector3 along = to - from;
+            along.y = 0f;
+
+            return along.sqrMagnitude > 1e-6f ? along.normalized : port.OutwardDirection;
+        }
+
+        /// <summary>
+        /// Where a ball begins its run: over the middle of the start piece, resting on its channel.
+        ///
+        /// Both parts of this were wrong and both looked like the ball being pushed the wrong way.
+        /// It was placed half a stud inside the mouth, which is less than a 24.5 mm ball's radius, so
+        /// the ball hung out through the opening; and it was raised five millimetres above the
+        /// channel floor when it needed a whole radius, so it began buried in the geometry. PhysX
+        /// resolves that overlap by shoving the ball out along whichever contact is deepest - a hard
+        /// push in an arbitrary direction, before the nudge has any say.
+        /// </summary>
+        Vector3 StartPosition(PlacedPart part, PlacedPart.WorldPort port)
+        {
+            float radius = CurrentType != null ? CurrentType.RadiusUnits : 0.12f;
+
+            // Horizontally over the part's centre, which is clear of every wall on a dead end.
+            part.GetTransform(out Vector3 centre, out _);
+
+            return new Vector3(
+                centre.x,
+                port.HeightUnits + radius + Clearance,
+                centre.z);
+        }
+
+        /// <summary>A hair above resting, so the ball settles rather than starting in contact.</summary>
+        const float Clearance = 0.004f;
 
         public string Status { get; private set; } = "";
+
+        /// <summary>
+        /// Releases a single ball from the first start piece, for repeated measurement.
+        ///
+        /// Separate from the ordinary release, which drops one at every start: a test needs exactly
+        /// one ball so the figures belong to one run rather than to whichever ball happened to be
+        /// fastest.
+        /// </summary>
+        public Marble ReleaseOne()
+        {
+            foreach (PlacedPart part in build.Map.Parts)
+            {
+                if (part.Role != PartRole.Start)
+                    continue;
+
+                foreach (PlacedPart.WorldPort port in part.WorldPorts())
+                {
+                    Marble marble = Spawn(StartPosition(part, port));
+
+                    if (marble != null)
+                        Nudge(marble, DepartureDirection(part, port));
+
+                    return marble;
+                }
+            }
+
+            (PlacedPart top, PlacedPart.WorldPort mouth) = HighestOpenMouth();
+            if (top == null)
+                return null;
+
+            Marble ball = Spawn(StartPosition(top, mouth));
+            if (ball != null)
+                Nudge(ball, DepartureDirection(top, mouth));
+
+            return ball;
+        }
+
+        bool HasStart()
+        {
+            foreach (PlacedPart part in build.Map.Parts)
+                if (part.Role == PartRole.Start)
+                    return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// The highest channel mouth that leads nowhere, which is where a run begins if nobody has
+        /// said otherwise.
+        ///
+        /// Marking a start is a thing to remember before every test, and forgetting it produced a
+        /// ball dropped at the world origin and a confusing message. The top of the track is almost
+        /// always what was meant, and it costs nothing to work out.
+        /// </summary>
+        (PlacedPart, PlacedPart.WorldPort) HighestOpenMouth()
+        {
+            PlacedPart best = null;
+            PlacedPart.WorldPort bestPort = default;
+            float highest = float.NegativeInfinity;
+
+            foreach (PlacedPart part in build.Map.Parts)
+            {
+                if (!part.HasPorts)
+                    continue;
+
+                foreach (PlacedPart.WorldPort port in part.WorldPorts())
+                {
+                    if (port.HeightUnits <= highest)
+                        continue;
+
+                    // Open only: a joined mouth has a run continuing through it, not starting there.
+                    if (build.Map.FindConnection(part, port) != null)
+                        continue;
+
+                    highest = port.HeightUnits;
+                    best = part;
+                    bestPort = port;
+                }
+            }
+
+            return (best, bestPort);
+        }
 
         public Marble Spawn(Vector3 position)
         {
@@ -160,8 +360,8 @@ namespace BlockMarbleRun.Play
                 dynamicFriction = type.dynamicFriction,
                 staticFriction = type.staticFriction,
                 bounciness = type.bounciness,
-                frictionCombine = PhysicsMaterialCombine.Multiply,
-                bounceCombine = PhysicsMaterialCombine.Maximum,
+                frictionCombine = PhysicsMaterialCombine.Average,
+                bounceCombine = PhysicsMaterialCombine.Average,
             };
 
             _physics[type] = material;
@@ -180,6 +380,75 @@ namespace BlockMarbleRun.Play
 
             _renderMaterials[type] = material;
             return material;
+        }
+
+        /// <summary>
+        /// Share of the drop the fastest ball still has in hand, as a percentage.
+        ///
+        /// The number that says whether the run is losing energy at all. A ball six slides down has
+        /// fallen six layers; if it can still climb five, the track is nearly lossless, and if it can
+        /// climb half of one then something is taking almost all of it. Speed alone cannot say that,
+        /// because a slow ball near the top and a slow ball at the bottom mean opposite things.
+        /// </summary>
+        public float EfficiencyPercent { get; private set; }
+
+        /// <summary>Contacts per second on the fastest ball: rolling registers few, clattering many.</summary>
+        public float ContactRate { get; private set; }
+
+        /// <summary>
+        /// Pushes the current ball type's values onto its shared material and every ball already in
+        /// play, so a change is felt immediately rather than on the next release.
+        /// </summary>
+        public void RefreshPhysics()
+        {
+            MarbleDefinition type = CurrentType;
+            if (type == null)
+                return;
+
+            if (_physics.TryGetValue(type, out PhysicsMaterial material) && material != null)
+            {
+                material.dynamicFriction = type.dynamicFriction;
+                material.staticFriction = type.staticFriction;
+                material.bounciness = type.bounciness;
+            }
+
+            foreach (Marble marble in _marbles)
+                if (marble != null && marble.Definition == type)
+                    marble.ApplyTunables();
+        }
+
+        void MeasureSpeeds()
+        {
+            float fastest = 0f;
+            Marble leader = null;
+
+            foreach (Marble marble in _marbles)
+            {
+                if (marble == null)
+                    continue;
+
+                float speed = marble.Body.linearVelocity.magnitude;
+                if (speed < fastest && leader != null)
+                    continue;
+
+                fastest = Mathf.Max(fastest, speed);
+                leader = marble;
+            }
+
+            FastestSpeed = fastest;
+            PeakSpeed = Mathf.Max(PeakSpeed, fastest);
+
+            if (leader == null)
+            {
+                EfficiencyPercent = 0f;
+                ContactRate = 0f;
+                return;
+            }
+
+            ContactRate = leader.ContactsPerSecond;
+
+            float dropped = (leader.PeakHeight - leader.transform.position.y) / GridCoord.LayerUnits;
+            EfficiencyPercent = dropped > 0.1f ? 100f * ClimbableLayers / dropped : 0f;
         }
 
         /// <summary>Retires marbles that reached a goal or fell out of the world.</summary>
@@ -215,21 +484,35 @@ namespace BlockMarbleRun.Play
         /// solid mesh collider for the marble to roll into, and adding an overlapping trigger to the
         /// same object invites the two to disagree about what counts as arrival.
         /// </summary>
+        readonly List<Vector3> _goalCentres = new();
+        int _goalsVersion = -1;
+
         bool ReachedGoal(Marble marble)
         {
             const float reach = GridCoord.StudUnits; // one stud
 
-            foreach (PlacedPart part in build.Map.Parts)
+            // Goal positions are rebuilt only when the build changes. Walking every part for every
+            // ball on every frame is work that grows with the size of the creation while answering
+            // the same question each time.
+            if (_goalsVersion != build.Map.Version)
             {
-                if (part.Role != PartRole.Goal)
-                    continue;
+                _goalsVersion = build.Map.Version;
+                _goalCentres.Clear();
 
-                part.GetTransform(out Vector3 centre, out _);
-                centre.y += GridCoord.LayerUnits * 0.5f;
+                foreach (PlacedPart part in build.Map.Parts)
+                {
+                    if (part.Role != PartRole.Goal)
+                        continue;
 
+                    part.GetTransform(out Vector3 centre, out _);
+                    centre.y += GridCoord.LayerUnits * 0.5f;
+                    _goalCentres.Add(centre);
+                }
+            }
+
+            foreach (Vector3 centre in _goalCentres)
                 if ((marble.transform.position - centre).sqrMagnitude <= reach * reach)
                     return true;
-            }
 
             return false;
         }
@@ -249,6 +532,8 @@ namespace BlockMarbleRun.Play
 
             Released = 0;
             Finished = 0;
+            PeakSpeed = 0f;
+            FastestSpeed = 0f;
             Lost = 0;
             BestSeconds = float.PositiveInfinity;
         }

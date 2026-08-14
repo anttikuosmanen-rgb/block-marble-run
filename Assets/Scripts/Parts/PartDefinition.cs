@@ -64,6 +64,15 @@ namespace BlockMarbleRun.Parts
 
         [Tooltip("Mouth width in studs. Two for every part in the current set.")]
         public int widthStuds;
+
+        /// <summary>
+        /// The channel's cross-section at this mouth: heights in millimetres above the part's base,
+        /// sampled at 1 mm across the opening.
+        ///
+        /// Carried so a joint can be bridged with the actual groove shape. A flat slab at floor
+        /// height would never be touched - the ball rides on the groove walls, not its bottom.
+        /// </summary>
+        public float[] profileMm;
     }
 
     /// <summary>
@@ -84,8 +93,11 @@ namespace BlockMarbleRun.Parts
         [Header("Geometry")]
         public Mesh mesh;
 
-        [Tooltip("Primitive-compound collider. The render mesh is never used for collision (DESIGN.md §3.3).")]
+        [Tooltip("Primitive-compound collider, for parts that do not use their own geometry (DESIGN.md §3.3).")]
         public GameObject colliderPrefab;
+
+        [Tooltip("Baked preview for the palette. See PartIconBaker.")]
+        public Texture2D icon;
 
         [Header("Grid")]
         [Tooltip("Footprint bounding size in studs.")]

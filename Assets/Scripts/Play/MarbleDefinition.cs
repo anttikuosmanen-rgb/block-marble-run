@@ -24,7 +24,32 @@ namespace BlockMarbleRun.Play
 
         [Range(0f, 1f)] public float dynamicFriction = 0.08f;
         [Range(0f, 1f)] public float staticFriction = 0.10f;
-        [Range(0f, 1f)] public float bounciness = 0.15f;
+        /// <summary>
+        /// Low, on measurement rather than argument.
+        ///
+        /// The case for keeping it high was that a bounce preserves the energy an inelastic impact
+        /// would absorb. What actually happens on an S-shaped slide is that one bad bounce launches
+        /// the ball, and it comes back down having traded forward motion for a vertical hop the run
+        /// never gets back. Losing a little at every crest beats losing most of it at one.
+        /// </summary>
+        [Range(0f, 1f)] public float bounciness = 0.05f;
+
+        /// <summary>Spin damping, applied every step whether or not the ball is touching anything.</summary>
+        [Range(0f, 0.5f)] public float angularDamping = 0.02f;
+
+        /// <summary>Drag on travel, as opposed to spin. Zero unless a ball is meant to feel heavy in air.</summary>
+        [Range(0f, 0.5f)] public float linearDamping;
+
+        [Tooltip("How far ahead of the surface contacts are generated, in world units.")]
+        [Range(0.0002f, 0.02f)] public float contactOffset = 0.002f;
+
+        [Tooltip("Swept detection is costlier but will not tunnel; speculative can catch a ball on an edge it has not reached.")]
+        public CollisionDetectionMode collisionDetection = CollisionDetectionMode.ContinuousDynamic;
+
+        [Tooltip("Solver iterations for this ball. Overrides the project default.")]
+        [Range(4, 40)] public int solverIterations = 10;
+
+        [Range(1, 20)] public int solverVelocityIterations = 4;
 
         public Color colour = new Color(0.85f, 0.9f, 1f);
         [Range(0f, 1f)] public float smoothness = 0.9f;

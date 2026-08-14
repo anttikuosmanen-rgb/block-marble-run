@@ -71,6 +71,8 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             factory.catalog = catalog;
             factory.startMaterial = startMaterial;
             factory.goalMaterial = goalMaterial;
+            factory.surfacePhysics = EnsureSurfacePhysics();
+            Verify(factory.surfacePhysics, "PartFactory.surfacePhysics");
 
             var raycaster = systems.AddComponent<BuildRaycaster>();
             raycaster.buildCamera = cam;
@@ -95,6 +97,14 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             stress.factory = factory;
             stress.partRoot = partRoot;
 
+            var joints = systems.AddComponent<BlockMarbleRun.Track.JointBridges>();
+            joints.controller = controller;
+            joints.factory = factory;
+
+            var welder = systems.AddComponent<BlockMarbleRun.Track.ChannelWelder>();
+            welder.controller = controller;
+            welder.factory = factory;
+
             var markers = systems.AddComponent<BlockMarbleRun.Track.OpenPortMarkers>();
             markers.controller = controller;
             markers.markerMaterial = markerMaterial;
@@ -109,13 +119,38 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             mode.build = controller;
             mode.play = play;
             mode.ghost = ghost;
+            mode.welder = welder;
+
+            var palette = systems.AddComponent<PartPalette>();
+            palette.controller = controller;
+            palette.mode = mode;
+
+            // After the mode exists: the stress keys clear the whole map, so they must not fire mid-run.
+            stress.mode = mode;
+            controller.palette = palette;
+
+            var tester = systems.AddComponent<RunTester>();
+            tester.play = play;
+
+            // After the tester exists: a batch must stop when the build is edited underneath it.
+            mode.tester = tester;
+
+            var physicsPanel = systems.AddComponent<PhysicsPanel>();
+            physicsPanel.play = play;
+            physicsPanel.mode = mode;
+            physicsPanel.factory = factory;
+            physicsPanel.joints = joints;
+            physicsPanel.welder = welder;
+            physicsPanel.tester = tester;
 
             var hud = systems.AddComponent<BuildHud>();
             hud.controller = controller;
             hud.stressTest = stress;
             hud.markers = markers;
+            hud.joints = joints;
             hud.play = play;
             hud.mode = mode;
+            hud.palette = palette;
 
             foreach (Component component in systems.GetComponents<Component>())
                 EditorUtility.SetDirty(component);
@@ -218,18 +253,18 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
         {
             var types = new List<MarbleDefinition>
             {
-                EnsureMarbleType("Plastic", 24.5f, 1.05f, 0.10f, 0.12f, 0.20f,
+                EnsureMarbleType("Plastic", 24.5f, 1.05f, 0.10f, 0.12f, 0.05f,
                     new Color(0.90f, 0.35f, 0.30f), smoothness: 0.55f, metallic: 0.0f),
 
-                EnsureMarbleType("Glass", 24.5f, 2.50f, 0.06f, 0.08f, 0.28f,
+                EnsureMarbleType("Glass", 24.5f, 2.50f, 0.06f, 0.08f, 0.08f,
                     new Color(0.70f, 0.90f, 1.00f), smoothness: 0.95f, metallic: 0.0f),
 
-                EnsureMarbleType("Steel", 24.5f, 7.80f, 0.05f, 0.07f, 0.12f,
+                EnsureMarbleType("Steel", 24.5f, 7.80f, 0.05f, 0.07f, 0.04f,
                     new Color(0.75f, 0.78f, 0.82f), smoothness: 0.90f, metallic: 1.0f),
 
                 // Smaller balls rattle in a channel built for 24.5 mm, which is the point of offering
                 // one - it shows how much the channel width is doing.
-                EnsureMarbleType("Small glass", 16.0f, 2.50f, 0.06f, 0.08f, 0.30f,
+                EnsureMarbleType("Small glass", 16.0f, 2.50f, 0.06f, 0.08f, 0.10f,
                     new Color(0.65f, 1.00f, 0.75f), smoothness: 0.95f, metallic: 0.0f),
             };
 
@@ -267,6 +302,44 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             // Re-load after saving, for the same reason the part catalog does (see EnsureCatalog).
             AssetDatabase.SaveAssets();
             return AssetDatabase.LoadAssetAtPath<MarbleDefinition>(path);
+        }
+
+        /// <summary>
+        /// Track and brick surfaces. Without an explicit material every part uses Unity's default
+        /// 0.6 friction, which combines with the ball's to something nobody chose - and the run's
+        /// whole character is in how much speed a descent keeps.
+        /// </summary>
+        static PhysicsMaterial EnsureSurfacePhysics()
+        {
+            // ".asset", not ".physicsMaterial". Unity 6 does not associate that extension, so the
+            // file imported under DefaultImporter as an unrecognised blob and loading it back as a
+            // PhysicsMaterial returned null - which then assigned as null, silently, and left every
+            // part on the engine's invisible defaults.
+            const string path = "Assets/Settings/Surface.asset";
+
+            var material = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(path);
+            if (material == null)
+            {
+                material = new PhysicsMaterial("Surface");
+                AssetDatabase.CreateAsset(material, path);
+            }
+
+            // Unity's default is 0.6/0.6 with no bounce, which is what every part silently used while
+            // there was no material here at all - half the contact behaviour, invisible and untunable.
+            material.dynamicFriction = 0.20f;
+            material.staticFriction = 0.30f;
+            material.bounciness = 0.40f;
+
+            // Average, not Multiply: multiplying two already-low numbers lands somewhere neither the
+            // ball nor the track asked for, and makes each one impossible to reason about alone.
+            // Average, so each side's number means something on its own. Multiply lands the pair
+            // somewhere neither the ball nor the track asked for.
+            material.frictionCombine = PhysicsMaterialCombine.Average;
+            material.bounceCombine = PhysicsMaterialCombine.Average;
+
+            EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssets();
+            return AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(path);
         }
 
         static GameObject CreateCamera()

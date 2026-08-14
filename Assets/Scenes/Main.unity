@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &563579184
+--- !u!1 &80154434
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,195 +127,104 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 563579194}
-  - component: {fileID: 563579193}
-  - component: {fileID: 563579192}
-  - component: {fileID: 563579191}
-  - component: {fileID: 563579190}
-  - component: {fileID: 563579189}
-  - component: {fileID: 563579188}
-  - component: {fileID: 563579187}
-  - component: {fileID: 563579186}
-  - component: {fileID: 563579185}
+  - component: {fileID: 80154438}
+  - component: {fileID: 80154437}
+  - component: {fileID: 80154436}
+  - component: {fileID: 80154435}
   m_Layer: 0
-  m_Name: Systems
+  m_Name: Ground
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &563579185
+--- !u!114 &80154435
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
+  m_GameObject: {fileID: 80154434}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 99307f90a01da44cfa732e4e2cf43e65, type: 3}
+  m_Script: {fileID: 11500000, guid: 648877f3687bc414fa2a515be43ce243, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.BuildHud
-  controller: {fileID: 563579190}
-  stressTest: {fileID: 563579189}
-  markers: {fileID: 563579188}
-  play: {fileID: 563579187}
-  mode: {fileID: 563579186}
---- !u!114 &563579186
-MonoBehaviour:
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.World.InfiniteGround
+  targetCamera: {fileID: 1147657481}
+  snap: 0.16
+--- !u!23 &80154436
+MeshRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
+  m_GameObject: {fileID: 80154434}
   m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fb25ce8afbd10401ebb6e5e56db95f96, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Core.GameMode
-  build: {fileID: 563579190}
-  play: {fileID: 563579187}
-  ghost: {fileID: 563579191}
---- !u!114 &563579187
-MonoBehaviour:
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: aa6f996e0d6ae4cc3bc6f34d5645c735, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 1
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_MaskInteraction: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &80154437
+MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c947d3c12c65d47f692cd346a173720f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Play.PlayController
-  build: {fileID: 563579190}
-  raycaster: {fileID: 563579192}
-  marbleMaterial: {fileID: 2100000, guid: e00c8d989497048719468a167aaa9b2e, type: 2}
-  marbleTypes:
-  - {fileID: 11400000, guid: 8c0a5bde69677487a8106bf231563b24, type: 2}
-  - {fileID: 11400000, guid: 63612a3c8d44e4a7f93bb0da5163695c, type: 2}
-  - {fileID: 11400000, guid: 185157b52f2af4a2baf6735a7ce6dd0c, type: 2}
-  - {fileID: 11400000, guid: 876f932312a6a4d23a08f3753198fd9c, type: 2}
-  maxMarbles: 16
-  killHeight: -1
---- !u!114 &563579188
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c3dd602bcf2624d9ba9ce2292e52cb32, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Track.OpenPortMarkers
-  controller: {fileID: 563579190}
-  markerMaterial: {fileID: 2100000, guid: 34c007e50f45d4e9daed122d358cd67f, type: 2}
-  size: 0.11
-  openColour: {r: 1, g: 0.55, b: 0.15, a: 1}
---- !u!114 &563579189
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0f4d4ace20b374762a1f6ac53a6f276c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.StressTest
-  controller: {fileID: 563579190}
-  factory: {fileID: 563579193}
-  partRoot: {fileID: 2074202550}
-  targetParts: 2000
-  withColliders: 1
---- !u!114 &563579190
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7bdde03a98e9b4e3b9a77affeff2fa53, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.BuildController
-  factory: {fileID: 563579193}
-  raycaster: {fileID: 563579192}
-  orbitCamera: {fileID: 605242531}
-  ghost: {fileID: 563579191}
-  partRoot: {fileID: 2074202550}
-  highlightMaterial: {fileID: 2100000, guid: 8f1ca7a53185246759abad63c4193bec, type: 2}
-  SlotName: My Creation
-  pillarPartId: building_block_2x2
---- !u!114 &563579191
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2dcf3be2758384fbc8f47277ee9ad6ba, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.GhostPreview
-  ghostMaterial: {fileID: 2100000, guid: 36c041a304633479a8c7c15cc53bf95b, type: 2}
-  validTint: {r: 0.35, g: 1, b: 0.45, a: 0.5}
-  blockedTint: {r: 1, g: 0.3, b: 0.25, a: 0.5}
-  unsupportedTint: {r: 1, g: 0.75, b: 0.2, a: 0.5}
---- !u!114 &563579192
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5567a73f08101491f8b1bfcc19a71958, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.World.BuildRaycaster
-  buildCamera: {fileID: 605242532}
-  partLayers:
-    serializedVersion: 2
-    m_Bits: 4294967291
-  maxDistance: 500
---- !u!114 &563579193
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e7d48acea46d346a4a2e45fc44e61685, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartFactory
-  partMaterial: {fileID: 2100000, guid: 464b9254521524007ba4bbff0be9895b, type: 2}
-  catalog: {fileID: 11400000, guid: 1c58232f5f6e140f4b7af9ae2618edf6, type: 2}
-  startMaterial: {fileID: 2100000, guid: bed22997e22854d8dbecc675182627f3, type: 2}
-  goalMaterial: {fileID: 2100000, guid: 8f2a9dcf4208f4ec38cfc0a28ac41c95, type: 2}
---- !u!4 &563579194
+  m_GameObject: {fileID: 80154434}
+  m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!4 &80154438
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 563579184}
+  m_GameObject: {fileID: 80154434}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 30, y: 30, z: 30}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &605242530
+--- !u!1 &93640890
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -323,169 +232,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 605242533}
-  - component: {fileID: 605242532}
-  - component: {fileID: 605242531}
-  m_Layer: 0
-  m_Name: Main Camera
-  m_TagString: MainCamera
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &605242531
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 605242530}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6f1a78e7c09e14c238ac7ff2bcd32664, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.CameraRig.OrbitCamera
-  pivot: {x: 0, y: 0, z: 0}
-  distance: 3
-  yaw: 35
-  pitch: 38
-  minPitch: 5
-  maxPitch: 85
-  minDistance: 0.4
-  maxDistance: 60
-  orbitSpeed: 0.25
-  panSpeed: 1
-  zoomSpeed: 0.12
-  smoothing: 12
---- !u!20 &605242532
-Camera:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 605242530}
-  m_Enabled: 1
-  serializedVersion: 2
-  m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.07, g: 0.08, b: 0.1, a: 1}
-  m_projectionMatrixMode: 1
-  m_GateFitMode: 2
-  m_FOVAxisMode: 0
-  m_Iso: 200
-  m_ShutterSpeed: 0.005
-  m_Aperture: 16
-  m_FocusDistance: 10
-  m_FocalLength: 50
-  m_BladeCount: 5
-  m_Curvature: {x: 2, y: 11}
-  m_BarrelClipping: 0.25
-  m_Anamorphism: 0
-  m_SensorSize: {x: 36, y: 24}
-  m_LensShift: {x: 0, y: 0}
-  m_NormalizedViewPortRect:
-    serializedVersion: 2
-    x: 0
-    y: 0
-    width: 1
-    height: 1
-  near clip plane: 0.03
-  far clip plane: 200
-  field of view: 60
-  orthographic: 0
-  orthographic size: 5
-  m_Depth: 0
-  m_CullingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_RenderingPath: -1
-  m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 0
-  m_TargetEye: 3
-  m_HDR: 1
-  m_AllowMSAA: 1
-  m_AllowDynamicResolution: 0
-  m_ForceIntoRT: 0
-  m_OcclusionCulling: 1
-  m_StereoConvergence: 10
-  m_StereoSeparation: 0.022
---- !u!4 &605242533
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 605242530}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &787612103
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 787612105}
-  - component: {fileID: 787612104}
-  m_Layer: 2
-  m_Name: Physics Floor
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!65 &787612104
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 787612103}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 2000, y: 1, z: 2000}
-  m_Center: {x: 0, y: -0.5, z: 0}
---- !u!4 &787612105
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 787612103}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &969966753
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 969966755}
-  - component: {fileID: 969966754}
+  - component: {fileID: 93640892}
+  - component: {fileID: 93640891}
   m_Layer: 0
   m_Name: Directional Light
   m_TagString: Untagged
@@ -493,13 +241,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!108 &969966754
+--- !u!108 &93640891
 Light:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 969966753}
+  m_GameObject: {fileID: 93640890}
   m_Enabled: 1
   serializedVersion: 13
   m_Type: 1
@@ -558,13 +306,13 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
---- !u!4 &969966755
+--- !u!4 &93640892
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 969966753}
+  m_GameObject: {fileID: 93640890}
   serializedVersion: 2
   m_LocalRotation: {x: 0.3809789, y: 0.31993034, z: -0.14244218, w: 0.8556926}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -573,7 +321,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1284098300
+--- !u!1 &436954920
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -581,104 +329,294 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1284098304}
-  - component: {fileID: 1284098303}
-  - component: {fileID: 1284098302}
-  - component: {fileID: 1284098301}
+  - component: {fileID: 436954935}
+  - component: {fileID: 436954934}
+  - component: {fileID: 436954933}
+  - component: {fileID: 436954932}
+  - component: {fileID: 436954931}
+  - component: {fileID: 436954930}
+  - component: {fileID: 436954929}
+  - component: {fileID: 436954928}
+  - component: {fileID: 436954927}
+  - component: {fileID: 436954926}
+  - component: {fileID: 436954925}
+  - component: {fileID: 436954924}
+  - component: {fileID: 436954923}
+  - component: {fileID: 436954922}
+  - component: {fileID: 436954921}
   m_Layer: 0
-  m_Name: Ground
+  m_Name: Systems
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1284098301
+--- !u!114 &436954921
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1284098300}
+  m_GameObject: {fileID: 436954920}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 648877f3687bc414fa2a515be43ce243, type: 3}
+  m_Script: {fileID: 11500000, guid: 99307f90a01da44cfa732e4e2cf43e65, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.World.InfiniteGround
-  targetCamera: {fileID: 605242532}
-  snap: 0.16
---- !u!23 &1284098302
-MeshRenderer:
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.BuildHud
+  controller: {fileID: 436954931}
+  stressTest: {fileID: 436954930}
+  markers: {fileID: 436954927}
+  joints: {fileID: 436954929}
+  play: {fileID: 436954926}
+  mode: {fileID: 436954925}
+  palette: {fileID: 436954924}
+--- !u!114 &436954922
+MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1284098300}
+  m_GameObject: {fileID: 436954920}
   m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: aa6f996e0d6ae4cc3bc6f34d5645c735, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 1
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &1284098303
-MeshFilter:
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 49f8bbf31237b42eaa9b8b3fd62a73de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Play.PhysicsPanel
+  play: {fileID: 436954926}
+  mode: {fileID: 436954925}
+  factory: {fileID: 436954934}
+  joints: {fileID: 436954929}
+  welder: {fileID: 436954928}
+  tester: {fileID: 436954923}
+  gravityScale: 1
+--- !u!114 &436954923
+MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1284098300}
-  m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
---- !u!4 &1284098304
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 198280ffc207d46e5a567f09888db142, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Play.RunTester
+  play: {fileID: 436954926}
+  runs: 10
+  stillSpeed: 0.15
+  stillSeconds: 0.4
+  timeoutSeconds: 4
+--- !u!114 &436954924
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c02271bdf6b0c4a179f218491811f1c9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.PartPalette
+  controller: {fileID: 436954931}
+  mode: {fileID: 436954925}
+  maxIconSize: 56
+  minIconSize: 30
+  maxRows: 3
+--- !u!114 &436954925
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fb25ce8afbd10401ebb6e5e56db95f96, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Core.GameMode
+  build: {fileID: 436954931}
+  play: {fileID: 436954926}
+  ghost: {fileID: 436954932}
+  welder: {fileID: 436954928}
+  tester: {fileID: 436954923}
+--- !u!114 &436954926
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c947d3c12c65d47f692cd346a173720f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Play.PlayController
+  build: {fileID: 436954931}
+  raycaster: {fileID: 436954933}
+  marbleMaterial: {fileID: 2100000, guid: e00c8d989497048719468a167aaa9b2e, type: 2}
+  marbleTypes:
+  - {fileID: 11400000, guid: 8c0a5bde69677487a8106bf231563b24, type: 2}
+  - {fileID: 11400000, guid: 63612a3c8d44e4a7f93bb0da5163695c, type: 2}
+  - {fileID: 11400000, guid: 185157b52f2af4a2baf6735a7ce6dd0c, type: 2}
+  - {fileID: 11400000, guid: 876f932312a6a4d23a08f3753198fd9c, type: 2}
+  maxMarbles: 16
+  killHeight: -1
+  releaseSpeed: 1.1
+--- !u!114 &436954927
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3dd602bcf2624d9ba9ce2292e52cb32, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Track.OpenPortMarkers
+  controller: {fileID: 436954931}
+  markerMaterial: {fileID: 2100000, guid: 34c007e50f45d4e9daed122d358cd67f, type: 2}
+  size: 0.11
+  openColour: {r: 1, g: 0.55, b: 0.15, a: 1}
+--- !u!114 &436954928
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 73011c615d5574e5fb5e1443a562ab41, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Track.ChannelWelder
+  controller: {fileID: 436954931}
+  factory: {fileID: 436954934}
+  weldInPlay: 1
+  maxTriangles: 120000
+--- !u!114 &436954929
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57720639ba58f4f15815baf2c5c36022, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Track.JointBridges
+  controller: {fileID: 436954931}
+  factory: {fileID: 436954934}
+  reach: 0.004
+  lift: 0
+  enabled_: 0
+--- !u!114 &436954930
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0f4d4ace20b374762a1f6ac53a6f276c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.StressTest
+  controller: {fileID: 436954931}
+  factory: {fileID: 436954934}
+  partRoot: {fileID: 1220095334}
+  mode: {fileID: 436954925}
+  targetParts: 2000
+  withColliders: 1
+--- !u!114 &436954931
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7bdde03a98e9b4e3b9a77affeff2fa53, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.BuildController
+  factory: {fileID: 436954934}
+  raycaster: {fileID: 436954933}
+  orbitCamera: {fileID: 1147657480}
+  ghost: {fileID: 436954932}
+  partRoot: {fileID: 1220095334}
+  highlightMaterial: {fileID: 2100000, guid: 8f1ca7a53185246759abad63c4193bec, type: 2}
+  palette: {fileID: 436954924}
+  SlotName: My Creation
+  pillarPartId: building_block_2x2
+--- !u!114 &436954932
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2dcf3be2758384fbc8f47277ee9ad6ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Build.GhostPreview
+  ghostMaterial: {fileID: 2100000, guid: 36c041a304633479a8c7c15cc53bf95b, type: 2}
+  validTint: {r: 0.35, g: 1, b: 0.45, a: 0.5}
+  blockedTint: {r: 1, g: 0.3, b: 0.25, a: 0.5}
+  unsupportedTint: {r: 1, g: 0.75, b: 0.2, a: 0.5}
+--- !u!114 &436954933
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5567a73f08101491f8b1bfcc19a71958, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.World.BuildRaycaster
+  buildCamera: {fileID: 1147657481}
+  partLayers:
+    serializedVersion: 2
+    m_Bits: 4294967291
+  maxDistance: 500
+--- !u!114 &436954934
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436954920}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7d48acea46d346a4a2e45fc44e61685, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartFactory
+  partMaterial: {fileID: 2100000, guid: 464b9254521524007ba4bbff0be9895b, type: 2}
+  catalog: {fileID: 11400000, guid: 1c58232f5f6e140f4b7af9ae2618edf6, type: 2}
+  surfacePhysics: {fileID: 13400000, guid: 28be1a6675cbf4427a41e11906432152, type: 2}
+  startMaterial: {fileID: 2100000, guid: bed22997e22854d8dbecc675182627f3, type: 2}
+  goalMaterial: {fileID: 2100000, guid: 8f2a9dcf4208f4ec38cfc0a28ac41c95, type: 2}
+--- !u!4 &436954935
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1284098300}
+  m_GameObject: {fileID: 436954920}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 30, y: 30, z: 30}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &2074202549
+--- !u!1 &1147657479
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -686,7 +624,115 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 2074202550}
+  - component: {fileID: 1147657482}
+  - component: {fileID: 1147657481}
+  - component: {fileID: 1147657480}
+  m_Layer: 0
+  m_Name: Main Camera
+  m_TagString: MainCamera
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1147657480
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1147657479}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f1a78e7c09e14c238ac7ff2bcd32664, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.CameraRig.OrbitCamera
+  pivot: {x: 0, y: 0, z: 0}
+  distance: 3
+  yaw: 35
+  pitch: 38
+  minPitch: 5
+  maxPitch: 85
+  minDistance: 0.75
+  maxDistance: 60
+  orbitSpeed: 0.25
+  panSpeed: 1
+  zoomSpeed: 0.12
+  smoothing: 12
+--- !u!20 &1147657481
+Camera:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1147657479}
+  m_Enabled: 1
+  serializedVersion: 2
+  m_ClearFlags: 2
+  m_BackGroundColor: {r: 0.07, g: 0.08, b: 0.1, a: 1}
+  m_projectionMatrixMode: 1
+  m_GateFitMode: 2
+  m_FOVAxisMode: 0
+  m_Iso: 200
+  m_ShutterSpeed: 0.005
+  m_Aperture: 16
+  m_FocusDistance: 10
+  m_FocalLength: 50
+  m_BladeCount: 5
+  m_Curvature: {x: 2, y: 11}
+  m_BarrelClipping: 0.25
+  m_Anamorphism: 0
+  m_SensorSize: {x: 36, y: 24}
+  m_LensShift: {x: 0, y: 0}
+  m_NormalizedViewPortRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+  near clip plane: 0.03
+  far clip plane: 200
+  field of view: 60
+  orthographic: 0
+  orthographic size: 5
+  m_Depth: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingPath: -1
+  m_TargetTexture: {fileID: 0}
+  m_TargetDisplay: 0
+  m_TargetEye: 3
+  m_HDR: 1
+  m_AllowMSAA: 1
+  m_AllowDynamicResolution: 0
+  m_ForceIntoRT: 0
+  m_OcclusionCulling: 1
+  m_StereoConvergence: 10
+  m_StereoSeparation: 0.022
+--- !u!4 &1147657482
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1147657479}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1220095333
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1220095334}
   m_Layer: 0
   m_Name: Parts
   m_TagString: Untagged
@@ -694,13 +740,66 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &2074202550
+--- !u!4 &1220095334
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2074202549}
+  m_GameObject: {fileID: 1220095333}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1789978752
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1789978754}
+  - component: {fileID: 1789978753}
+  m_Layer: 2
+  m_Name: Physics Floor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!65 &1789978753
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1789978752}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 2000, y: 1, z: 2000}
+  m_Center: {x: 0, y: -0.5, z: 0}
+--- !u!4 &1789978754
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1789978752}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -713,9 +812,9 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 605242533}
-  - {fileID: 969966755}
-  - {fileID: 1284098304}
-  - {fileID: 787612105}
-  - {fileID: 563579194}
-  - {fileID: 2074202550}
+  - {fileID: 1147657482}
+  - {fileID: 93640892}
+  - {fileID: 80154438}
+  - {fileID: 1789978754}
+  - {fileID: 436954935}
+  - {fileID: 1220095334}

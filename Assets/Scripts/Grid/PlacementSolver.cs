@@ -19,53 +19,204 @@ namespace BlockMarbleRun.Grid
     {
         const float HeightTolerance = 0.005f;
 
-        /// <summary>Layers to consider around the resting height when nothing connects.</summary>
-        const int FallbackSearch = 0;
+        /// <summary>How many studs either side of the cursor a channel part may snap to find a join.</summary>
+        const int SnapReach = 1;
 
+        /// <summary>
+        /// Chooses height and, for channel parts, facing.
+        ///
+        /// A track piece turns itself to meet whatever open mouth is beside it. Aligning a curve by
+        /// hand means reading which way its channel points and pressing R the right number of times -
+        /// on every single piece - when the geometry already says which way it has to go. The
+        /// player's own rotation is kept as a tie-break, so R still chooses between equally good
+        /// facings and still governs pieces with no channel at all.
+        /// </summary>
         public static PlacedPart Solve(GridMap map, PartDefinition def, int anchorX, int anchorY,
                                        int rotation, byte colorIndex)
         {
-            int restLayer = RestLayerFor(map, def, anchorX, anchorY, rotation, colorIndex);
+            List<PlacedPart> ranked = SolveRanked(map, def, anchorX, anchorY, rotation, colorIndex);
+            return ranked.Count > 0
+                ? ranked[0]
+                : new PlacedPart(def, new GridCoord(anchorX, anchorY,
+                    RestLayerFor(map, def, anchorX, anchorY, rotation, colorIndex)), rotation, colorIndex);
+        }
 
-            var candidates = new HashSet<int> { restLayer };
-            CollectPortLayers(map, def, anchorX, anchorY, rotation, colorIndex, candidates);
+        /// <summary>
+        /// The ways this piece could meet a given neighbouring mouth - one per mouth of its own.
+        ///
+        /// This is what cycling should offer. A curve has an entry and an exit, and which of the two
+        /// meets the run is the only real choice; ranking every placement in reach instead offered
+        /// alternatives at other positions and heights, which is not a question anyone was asking.
+        ///
+        /// Each mating is solved rather than searched: a mouth must end up facing the opposite way to
+        /// its partner, which fixes the rotation, and its centre line and floor must coincide with the
+        /// partner's, which fixes the position and the layer.
+        /// </summary>
+        public static List<PlacedPart> MatingsWith(GridMap map, PartDefinition def, byte colorIndex,
+                                                   PlacedPart.WorldPort target)
+        {
+            var matings = new List<PlacedPart>();
 
-            PlacedPart best = null;
-            int bestScore = int.MinValue;
+            if (def.ports == null)
+                return matings;
 
-            foreach (int layer in candidates)
+            Vector2Int halfStudSize = def.footprintSize * 2;
+            Facing wanted = PlacedPart.WorldPort.Opposite(target.Facing);
+
+            foreach (TrackPort port in def.ports)
             {
-                if (layer < 0)
-                    continue;
-
-                var candidate = new PlacedPart(def, new GridCoord(anchorX, anchorY, layer), rotation, colorIndex);
-                PlacementResult result = map.CanPlace(candidate);
-
-                if (result == PlacementResult.Blocked)
-                    continue;
-
-                int score = 0;
-
-                // A joined channel is the strongest signal of intent: the player is continuing a run.
-                if (map.HasPortConnection(candidate))
-                    score += 1000;
-
-                if (result == PlacementResult.Valid)
-                    score += 100;
-
-                // Among equals prefer the lowest, so a piece settles rather than hovering at the
-                // highest height that happens to work.
-                score -= layer;
-
-                if (score > bestScore)
+                for (int rotation = 0; rotation < 4; rotation++)
                 {
-                    bestScore = score;
-                    best = candidate;
+                    if ((Facing)(((int)port.facing + rotation) % 4) != wanted)
+                        continue;
+
+                    Vector2Int midline = PlacedPart.RotateHalfStudPoint(port.midlineHalfStuds, halfStudSize, rotation);
+
+                    // The origin that puts this mouth exactly on the partner's centre line.
+                    int originHalfX = target.MidlineHalfStuds.x - midline.x;
+                    int originHalfY = target.MidlineHalfStuds.y - midline.y;
+
+                    // Only whole studs are placements; a half-stud offset is not a position on the grid.
+                    if ((originHalfX & 1) != 0 || (originHalfY & 1) != 0)
+                        continue;
+
+                    float layerFloat = (target.HeightUnits - port.heightMm * PlacedPart.MmToUnits) / GridCoord.LayerUnits;
+                    int layer = Mathf.RoundToInt(layerFloat);
+
+                    if (Mathf.Abs(layerFloat - layer) * GridCoord.LayerUnits > HeightTolerance || layer < 0)
+                        continue;
+
+                    var candidate = new PlacedPart(def,
+                        new GridCoord(originHalfX / 2, originHalfY / 2, layer), rotation, colorIndex);
+
+                    if (map.CanPlace(candidate) != PlacementResult.Blocked)
+                        matings.Add(candidate);
                 }
             }
 
-            // Every candidate was blocked; return the resting placement so the ghost can show why.
-            return best ?? new PlacedPart(def, new GridCoord(anchorX, anchorY, restLayer), rotation, colorIndex);
+            return matings;
+        }
+
+        /// <summary>
+        /// The open mouth nearest a point, which is the joint a piece brought there is aiming at.
+        /// </summary>
+        public static bool NearestOpenMouth(GridMap map, Vector3 near, float maxDistance,
+                                            out PlacedPart.WorldPort target)
+        {
+            target = default;
+            float best = maxDistance * maxDistance;
+            bool found = false;
+
+            foreach (PlacedPart part in map.Parts)
+            {
+                if (!part.HasPorts)
+                    continue;
+
+                foreach (PlacedPart.WorldPort port in part.WorldPorts())
+                {
+                    if (map.FindConnection(part, port) != null)
+                        continue;
+
+                    float distance = (port.WorldPosition - near).sqrMagnitude;
+                    if (distance >= best)
+                        continue;
+
+                    best = distance;
+                    target = port;
+                    found = true;
+                }
+            }
+
+            return found;
+        }
+
+        /// <summary>
+        /// Every placement worth offering, best first.
+        ///
+        /// Returned as a list rather than a single answer so the player can step through the
+        /// alternatives. A curve beside an open mouth usually has two or three ways it could join, and
+        /// picking one for them is a guess - cycling is the difference between the piece being helpful
+        /// and the piece being stubborn.
+        /// </summary>
+        public static List<PlacedPart> SolveRanked(GridMap map, PartDefinition def, int anchorX, int anchorY,
+                                                   int rotation, byte colorIndex)
+        {
+            var scored = new List<(PlacedPart part, int score)>();
+            Gather(map, def, anchorX, anchorY, rotation, colorIndex, scored);
+
+            scored.Sort((a, b) => b.score.CompareTo(a.score));
+
+            var ranked = new List<PlacedPart>(scored.Count);
+            foreach ((PlacedPart part, int _) in scored)
+                ranked.Add(part);
+
+            return ranked;
+        }
+
+        static void Gather(GridMap map, PartDefinition def, int anchorX, int anchorY,
+                           int rotation, byte colorIndex, List<(PlacedPart, int)> scored)
+        {
+            bool hasPorts = def.ports is { Length: > 0 };
+            bool autoFace = hasPorts && def.rotation == RotationMode.Free90;
+
+            int rotations = autoFace ? 4 : 1;
+
+            // Channel parts also search the studs around the cursor. Searching only the exact cursor
+            // cell meant a join happened only when the player landed on precisely the right stud, so
+            // slides mostly gave up and sat on the ground instead - and the piece looked like it was
+            // refusing to connect when it was really never offered the chance.
+            int reach = hasPorts ? SnapReach : 0;
+
+            for (int offsetX = -reach; offsetX <= reach; offsetX++)
+            for (int offsetY = -reach; offsetY <= reach; offsetY++)
+            for (int step = 0; step < rotations; step++)
+            {
+                int x = anchorX + offsetX;
+                int y = anchorY + offsetY;
+                int candidateRotation = autoFace ? (rotation + step) % 4 : rotation;
+
+                int restLayer = RestLayerFor(map, def, x, y, candidateRotation, colorIndex);
+
+                var layers = new HashSet<int> { restLayer };
+                CollectPortLayers(map, def, x, y, candidateRotation, colorIndex, layers);
+
+                foreach (int layer in layers)
+                {
+                    if (layer < 0)
+                        continue;
+
+                    var candidate = new PlacedPart(def, new GridCoord(x, y, layer),
+                        candidateRotation, colorIndex);
+
+                    PlacementResult result = map.CanPlace(candidate);
+                    if (result == PlacementResult.Blocked)
+                        continue;
+
+                    int score = 0;
+
+                    // A joined channel is the strongest signal of intent: the player is continuing a
+                    // run. It outranks everything, including sitting exactly where the cursor points.
+                    if (map.HasPortConnection(candidate))
+                        score += 1000;
+
+                    if (result == PlacementResult.Valid)
+                        score += 100;
+
+                    // Only after connecting does the player's own choice of facing matter.
+                    if (candidateRotation == rotation)
+                        score += 10;
+
+                    // Drifting from the cursor is a cost, so an equally good placement under the
+                    // pointer always beats one a stud away, and the snap never feels like a fight.
+                    score -= 4 * (Mathf.Abs(offsetX) + Mathf.Abs(offsetY));
+
+                    // Among equals prefer the lowest, so a piece settles rather than hovering at the
+                    // highest height that happens to work.
+                    score -= layer;
+
+                    scored.Add((candidate, score));
+                }
+            }
         }
 
         /// <summary>

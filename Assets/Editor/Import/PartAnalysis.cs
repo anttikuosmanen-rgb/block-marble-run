@@ -418,7 +418,7 @@ namespace BlockMarbleRun.EditorTools.Import
 
                 if (runStart >= 0 && !continues)
                 {
-                    EmitPort(facing, runStart, cell, runHeight);
+                    EmitPort(facing, runStart, cell, runHeight, height, w, h);
                     runStart = -1;
                 }
 
@@ -430,7 +430,7 @@ namespace BlockMarbleRun.EditorTools.Import
             }
         }
 
-        void EmitPort(Facing facing, int fromCell, int toCell, float heightMm)
+        void EmitPort(Facing facing, int fromCell, int toCell, float heightMm, float[] map, int w, int h)
         {
             int widthStuds = toCell - fromCell;
 
@@ -458,7 +458,53 @@ namespace BlockMarbleRun.EditorTools.Import
                 facing = facing,
                 heightMm = heightMm,
                 widthStuds = widthStuds,
+                profileMm = SampleMouthProfile(facing, fromCell, toCell, map, w, h),
             });
+        }
+
+        /// <summary>
+        /// Reads the channel's shape across a mouth.
+        ///
+        /// Taken a few millimetres inside the part rather than at the very edge, where a chamfer or
+        /// the outer wall's rim would be measured instead of the channel the ball actually runs in.
+        /// </summary>
+        float[] SampleMouthProfile(Facing facing, int fromCell, int toCell, float[] map, int w, int h)
+        {
+            const int insetMm = 3;
+
+            bool alongY = facing == Facing.West || facing == Facing.East;
+            int samplesAlong = alongY ? h : w;
+            int cellsAlong = alongY ? FootprintSize.y : FootprintSize.x;
+
+            float perCell = samplesAlong / (float)cellsAlong;
+            int from = Mathf.RoundToInt(fromCell * perCell);
+            int to = Mathf.RoundToInt(toCell * perCell);
+
+            var profile = new float[Mathf.Max(2, to - from)];
+
+            for (int i = 0; i < profile.Length; i++)
+            {
+                int s = from + i;
+
+                int across = facing switch
+                {
+                    Facing.West => insetMm,
+                    Facing.East => w - 1 - insetMm,
+                    Facing.South => insetMm,
+                    _ => h - 1 - insetMm,
+                };
+
+                int x = alongY ? across : s;
+                int y = alongY ? s : across;
+
+                float value = x >= 0 && y >= 0 && x < w && y < h ? map[y * w + x] : float.NegativeInfinity;
+
+                // Missing geometry reads as the channel floor, which keeps a bridge continuous rather
+                // than punching a hole in it.
+                profile[i] = float.IsNegativeInfinity(value) ? ChannelFloorMm : value;
+            }
+
+            return profile;
         }
 
         /// <summary>

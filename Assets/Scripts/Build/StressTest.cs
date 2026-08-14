@@ -20,6 +20,7 @@ namespace BlockMarbleRun.Build
         public BuildController controller;
         public PartFactory factory;
         public Transform partRoot;
+        public BlockMarbleRun.Core.GameMode mode;
 
         [SerializeField] int targetParts = 2000;
 
@@ -46,6 +47,11 @@ namespace BlockMarbleRun.Build
         {
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null)
+                return;
+
+            // Build mode only. These keys clear and repopulate the whole map, which in play mode
+            // means G silently deletes the build the player is running a ball through.
+            if (mode != null && mode.Current != BlockMarbleRun.Core.Mode.Build)
                 return;
 
             // Measured on WebGL: cutting triangles fourfold changed nothing (20 ms either way), while

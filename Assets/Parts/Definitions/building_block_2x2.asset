@@ -17,6 +17,7 @@ MonoBehaviour:
   category: 0
   mesh: {fileID: -8670151273213183110, guid: 0ae3de7d0a00a471a9fb184527964b5c, type: 3}
   colliderPrefab: {fileID: 0}
+  icon: {fileID: 2800000, guid: abdc856bb60934cf594de22083756591, type: 3}
   footprintSize: {x: 2, y: 2}
   footprintMask: 01010101
   layerMasks: 01010101

@@ -12,6 +12,9 @@ namespace BlockMarbleRun.Parts
         public Material partMaterial;
         public PartCatalog catalog;
 
+        [Tooltip("Surface properties for the track itself. Without one, parts use Unity's default 0.6 friction.")]
+        public PhysicsMaterial surfacePhysics;
+
         [Tooltip("Tints for designated start and goal pieces, so a role reads at a glance.")]
         public Material startMaterial;
         public Material goalMaterial;
@@ -127,7 +130,7 @@ namespace BlockMarbleRun.Parts
         /// Approximating a trough out of boxes was the alternative, and it would have been both more
         /// code and less accurate at exactly the thing the game is about - how a marble rolls.
         /// </summary>
-        static void AddColliders(GameObject go, PlacedPart part)
+        void AddColliders(GameObject go, PlacedPart part)
         {
             PartDefinition def = part.Definition;
 
@@ -138,6 +141,7 @@ namespace BlockMarbleRun.Parts
                 var channel = go.AddComponent<MeshCollider>();
                 channel.sharedMesh = def.mesh;
                 channel.convex = false; // static, so concave is fine and the trough survives
+                channel.sharedMaterial = surfacePhysics;
                 return;
             }
 
@@ -148,6 +152,7 @@ namespace BlockMarbleRun.Parts
                 var studded = go.AddComponent<MeshCollider>();
                 studded.sharedMesh = BrickColliderBuilder.For(def);
                 studded.convex = false;
+                studded.sharedMaterial = surfacePhysics;
                 return;
             }
 
@@ -161,7 +166,7 @@ namespace BlockMarbleRun.Parts
         /// middle, for instance - gets one box per occupied cell, so the hole stays a hole instead of
         /// becoming a wall the player cannot click through.
         /// </summary>
-        static void AddFootprintColliders(GameObject go, PlacedPart part)
+        void AddFootprintColliders(GameObject go, PlacedPart part)
         {
             PartDefinition def = part.Definition;
             Vector2Int size = def.footprintSize;

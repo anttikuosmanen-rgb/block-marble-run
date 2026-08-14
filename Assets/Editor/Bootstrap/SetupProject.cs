@@ -110,9 +110,40 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             rendererData.renderingMode = RenderingMode.Forward;
             EditorUtility.SetDirty(rendererData);
 
+            ConfigureShadows(pipeline);
+
             GraphicsSettings.defaultRenderPipeline = pipeline;
             QualitySettings.renderPipeline = pipeline;
             PlayerSettings.colorSpace = ColorSpace.Linear;
+        }
+
+        /// <summary>
+        /// Pushes shadow sampling off the surface it is shading.
+        ///
+        /// A channel is a smooth-shaded curve barely a couple of millimetres thick, and at default
+        /// bias it shadows itself: the depth comparison lands on the wrong side of its own surface
+        /// and paints dark bands across the inside of the trough. They read as structure hidden
+        /// inside the part, which is exactly what they are not.
+        /// </summary>
+        static void ConfigureShadows(UniversalRenderPipelineAsset pipeline)
+        {
+            var so = new SerializedObject(pipeline);
+
+            SerializedProperty depth = so.FindProperty("m_ShadowDepthBias");
+            SerializedProperty normal = so.FindProperty("m_ShadowNormalBias");
+            SerializedProperty distance = so.FindProperty("m_ShadowDistance");
+            SerializedProperty resolution = so.FindProperty("m_MainLightShadowmapResolution");
+
+            if (depth != null) depth.floatValue = 2.0f;
+            if (normal != null) normal.floatValue = 2.0f;
+
+            // A build spans metres at most, so a long shadow distance only wastes map resolution on
+            // ground nobody is looking at - and coarse texels are half of why the bias is needed.
+            if (distance != null) distance.floatValue = 12f;
+            if (resolution != null) resolution.intValue = 2048;
+
+            so.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(pipeline);
         }
 
         /// <summary>

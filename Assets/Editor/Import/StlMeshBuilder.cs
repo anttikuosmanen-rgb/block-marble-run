@@ -21,6 +21,8 @@ namespace BlockMarbleRun.EditorTools.Import
 
         public static Mesh Build(List<StlFacet> facets, float scale, float smoothingAngleDeg, string name)
         {
+            facets = MakeOrientationConsistent(facets);
+
             // Area-weighted, and deliberately un-normalised. Two reasons, both learned the hard way:
             //
             // Vector3.normalized silently returns zero below a magnitude of 1e-5, and a triangle's
@@ -96,6 +98,153 @@ namespace BlockMarbleRun.EditorTools.Import
 
             return mesh;
         }
+
+        /// <summary>
+        /// Makes every triangle agree with its neighbours about which side is out.
+        ///
+        /// STL stores triangles independently, so nothing stops an exporter emitting a few with the
+        /// opposite winding. Those render as holes - looking straight through the surface into the
+        /// inside of the part - and slide_2x4 ships with 66 of them.
+        ///
+        /// Works by walking the mesh through shared edges: two triangles that agree traverse their
+        /// shared edge in opposite directions, so any neighbour that traverses it the same way is
+        /// flipped. This only makes the mesh self-consistent; which way "out" is remains the winding
+        /// vote's decision.
+        /// </summary>
+        static List<StlFacet> MakeOrientationConsistent(List<StlFacet> facets)
+        {
+            var byEdge = new Dictionary<(Vector3Int, Vector3Int), List<int>>();
+
+            for (int i = 0; i < facets.Count; i++)
+            {
+                foreach ((Vector3Int a, Vector3Int b) in Edges(facets[i]))
+                {
+                    (Vector3Int, Vector3Int) key = EdgeKey(a, b);
+
+                    if (!byEdge.TryGetValue(key, out List<int> list))
+                        byEdge[key] = list = new List<int>(2);
+
+                    list.Add(i);
+                }
+            }
+
+            // Leave a mesh alone unless it actually disagrees with itself. Nineteen of the twenty
+            // parts are already consistent, and a repair pass that runs regardless is a repair pass
+            // that can only introduce faults.
+            if (!HasOrientationConflict(byEdge, facets))
+                return facets;
+
+            var result = new List<StlFacet>(facets);
+            var visited = new bool[facets.Count];
+            var queue = new Queue<int>();
+            int flipped = 0;
+
+            for (int seed = 0; seed < result.Count; seed++)
+            {
+                if (visited[seed])
+                    continue;
+
+                visited[seed] = true;
+                queue.Enqueue(seed);
+
+                while (queue.Count > 0)
+                {
+                    int current = queue.Dequeue();
+
+                    foreach ((Vector3Int a, Vector3Int b) in Edges(result[current]))
+                    {
+                        (Vector3Int, Vector3Int) key = EdgeKey(a, b);
+                        if (!byEdge.TryGetValue(key, out List<int> neighbours))
+                            continue;
+
+                        foreach (int other in neighbours)
+                        {
+                            if (other == current || visited[other])
+                                continue;
+
+                            visited[other] = true;
+
+                            // Same direction along a shared edge means the two disagree about facing.
+                            if (Traverses(result[other], a, b))
+                            {
+                                StlFacet f = result[other];
+                                (f.B, f.C) = (f.C, f.B);
+                                f.Normal = -f.Normal;
+                                result[other] = f;
+                                flipped++;
+                            }
+
+                            queue.Enqueue(other);
+                        }
+                    }
+                }
+            }
+
+            if (flipped > 0)
+                Debug.Log($"[STL] Reoriented {flipped} triangle(s) that faced the wrong way.");
+
+            return result;
+        }
+
+        /// <summary>
+        /// Canonical key for an undirected edge.
+        ///
+        /// Ordered by coordinate, not by hash. Hash codes collide and do not form a total order, so
+        /// keying on them scattered shared edges into different buckets - the walk then saw almost no
+        /// neighbours as connected and "repaired" three quarters of the mesh into facing inward.
+        /// </summary>
+        static (Vector3Int, Vector3Int) EdgeKey(Vector3Int a, Vector3Int b) =>
+            Precedes(a, b) ? (a, b) : (b, a);
+
+        static bool Precedes(Vector3Int a, Vector3Int b)
+        {
+            if (a.x != b.x) return a.x < b.x;
+            if (a.y != b.y) return a.y < b.y;
+            return a.z < b.z;
+        }
+
+        /// <summary>True when two triangles traverse a shared edge the same way, meaning one is flipped.</summary>
+        static bool HasOrientationConflict(Dictionary<(Vector3Int, Vector3Int), List<int>> byEdge,
+                                           List<StlFacet> facets)
+        {
+            foreach (KeyValuePair<(Vector3Int, Vector3Int), List<int>> pair in byEdge)
+            {
+                if (pair.Value.Count != 2)
+                    continue;
+
+                (Vector3Int from, Vector3Int to) = pair.Key;
+
+                if (Traverses(facets[pair.Value[0]], from, to) == Traverses(facets[pair.Value[1]], from, to))
+                    return true;
+            }
+
+            return false;
+        }
+
+        static IEnumerable<(Vector3Int, Vector3Int)> Edges(StlFacet f)
+        {
+            Vector3Int a = Quantise(f.A);
+            Vector3Int b = Quantise(f.B);
+            Vector3Int c = Quantise(f.C);
+
+            yield return (a, b);
+            yield return (b, c);
+            yield return (c, a);
+        }
+
+        static bool Traverses(StlFacet f, Vector3Int from, Vector3Int to)
+        {
+            foreach ((Vector3Int a, Vector3Int b) in Edges(f))
+                if (a == from && b == to)
+                    return true;
+
+            return false;
+        }
+
+        static Vector3Int Quantise(Vector3 v) => new Vector3Int(
+            Mathf.RoundToInt(v.x * 10000f),
+            Mathf.RoundToInt(v.y * 10000f),
+            Mathf.RoundToInt(v.z * 10000f));
 
         /// <summary>
         /// Signed volume of a closed mesh under Unity's winding convention: positive when faces point

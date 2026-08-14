@@ -13,6 +13,18 @@ namespace BlockMarbleRun.Play
         SphereCollider _sphere;
 
         public MarbleDefinition Definition { get; private set; }
+
+        /// <summary>Highest point reached, so the descent so far can be measured against what is left.</summary>
+        public float PeakHeight { get; private set; }
+
+        /// <summary>Fresh contacts per second. A ball rolling cleanly registers few; one clattering registers many.</summary>
+        public float ContactsPerSecond { get; private set; }
+
+        int _contacts;
+        float _contactWindow;
+
+        /// <summary>Every fresh contact since launch, for comparing whole runs against each other.</summary>
+        public int TotalContacts { get; private set; }
         public Rigidbody Body => _body;
         public float Age { get; private set; }
 
@@ -22,17 +34,14 @@ namespace BlockMarbleRun.Play
             _sphere = GetComponent<SphereCollider>();
 
             _body.linearDamping = 0f;
-            _body.angularDamping = 0.02f;
-            _body.interpolation = RigidbodyInterpolation.Interpolate;
 
-            // A ball moving fast enough to leave a track will pass straight through a wall between
-            // two fixed steps without this.
-            _body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            _body.interpolation = RigidbodyInterpolation.Interpolate;
 
             // The default cap is 7 rad/s. A 24.5 mm ball rolling at even walking pace exceeds that,
             // and the clamp shows up as a ball sliding down the channel instead of rolling - the
             // single most misleading physics default at this scale.
             _body.maxAngularVelocity = 200f;
+
         }
 
         /// <summary>
@@ -48,9 +57,49 @@ namespace BlockMarbleRun.Play
             transform.localScale = Vector3.one * (definition.RadiusUnits * 2f);
 
             _body.mass = definition.MassKg;
+            ApplyTunables();
         }
 
-        void FixedUpdate() => Age += Time.fixedDeltaTime;
+        /// <summary>
+        /// Re-reads everything the physics panel can change, so a ball already rolling responds to a
+        /// slider rather than only the next one spawned. Tuning against balls you have to re-release
+        /// each time hides the very moment a change matters.
+        /// </summary>
+        public void ApplyTunables()
+        {
+            if (Definition == null)
+                return;
+
+            _body.angularDamping = Definition.angularDamping;
+            _body.linearDamping = Definition.linearDamping;
+            _body.collisionDetectionMode = Definition.collisionDetection;
+            _body.solverIterations = Definition.solverIterations;
+            _body.solverVelocityIterations = Definition.solverVelocityIterations;
+
+            _sphere.contactOffset = Definition.contactOffset;
+        }
+
+        void FixedUpdate()
+        {
+            Age += Time.fixedDeltaTime;
+            PeakHeight = Mathf.Max(PeakHeight, transform.position.y);
+
+            _contactWindow += Time.fixedDeltaTime;
+            if (_contactWindow < 0.25f)
+                return;
+
+            ContactsPerSecond = _contacts / _contactWindow;
+            _contacts = 0;
+            _contactWindow = 0f;
+        }
+
+        // Counted rather than inspected: what matters is how often the ball starts touching something
+        // new, which is the difference between rolling along a surface and bouncing down it.
+        void OnCollisionEnter(Collision collision)
+        {
+            _contacts++;
+            TotalContacts++;
+        }
 
         public void Launch(Vector3 position)
         {
@@ -63,6 +112,8 @@ namespace BlockMarbleRun.Play
             _body.linearVelocity = Vector3.zero;
             _body.angularVelocity = Vector3.zero;
             Age = 0f;
+            PeakHeight = position.y;
+            TotalContacts = 0;
         }
     }
 }
