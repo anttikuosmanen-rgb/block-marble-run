@@ -110,6 +110,61 @@ namespace BlockMarbleRun.Build
             }
         }
 
+        readonly Dictionary<Material, Material> _tinted = new();
+
+        /// <summary>
+        /// The selected look: the piece's own colour pulled towards the highlight, not replaced by it.
+        ///
+        /// One flat highlight material for everything made selection indistinguishable from painting
+        /// - a selected red brick and a selected blue one were the same mint, so the only way to know
+        /// what you had was to deselect and look. Tinting keeps the piece recognisable while still
+        /// reading as picked out.
+        ///
+        /// Still a shared material per colour rather than a property block, for the reason above:
+        /// property blocks cost every affected renderer its SRP batching, and there are only as many
+        /// of these as there are palette entries.
+        /// </summary>
+        Material TintFor(PlacedPart part)
+        {
+            Material basis = _factory.MaterialFor(part);
+            if (_highlightMaterial == null || basis == null)
+                return _highlightMaterial != null ? _highlightMaterial : basis;
+
+            // Keyed by the basis material itself: there is one per palette colour plus the role
+            // materials, so the dictionary stays the size of the palette however large the build is.
+            Material key = basis;
+            if (_tinted.TryGetValue(key, out Material cached) && cached != null)
+                return cached;
+
+            // Copied from the part's own material, not from the highlight.
+            //
+            // Building it the other way round was the reason selection still looked like paint: the
+            // highlight's cyan emission came along with the template and lit every piece the same
+            // colour, so a red brick and a blue one were both mint however carefully the base colour
+            // was blended underneath it.
+            var tint = new Material(basis) { name = $"{basis.name} (selected)" };
+
+            Color own = basis.HasProperty(BaseColor) ? basis.GetColor(BaseColor) : Color.white;
+            Color highlight = _highlightMaterial.HasProperty(BaseColor)
+                ? _highlightMaterial.GetColor(BaseColor)
+                : new Color(0.35f, 0.85f, 1f);
+
+            tint.SetColor(BaseColor, Color.Lerp(own, highlight, 0.28f));
+
+            if (tint.HasProperty(EmissionColor))
+            {
+                // Enough to read as picked out under any lighting, not enough to become the colour.
+                tint.SetColor(EmissionColor, highlight * 0.12f);
+                tint.EnableKeyword("_EMISSION");
+            }
+
+            _tinted[key] = tint;
+            return tint;
+        }
+
+        static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
+        static readonly int EmissionColor = Shader.PropertyToID("_EmissionColor");
+
         void SetHighlight(PlacedPart part, bool highlighted)
         {
             if (part?.Instance == null)
@@ -119,9 +174,28 @@ namespace BlockMarbleRun.Build
             if (renderer == null)
                 return;
 
-            renderer.sharedMaterial = highlighted
-                ? _highlightMaterial
-                : _factory.MaterialFor(part);
+            renderer.sharedMaterial = highlighted ? TintFor(part) : _factory.MaterialFor(part);
+        }
+
+        /// <summary>
+        /// Puts every selected part back to its own material without emptying the selection.
+        ///
+        /// Needed when the parts are about to be replaced by transformed copies: the originals are
+        /// destroyed, and a highlight is not something the replacement inherits.
+        /// </summary>
+        public void ClearHighlights()
+        {
+            foreach (PlacedPart part in _selected)
+                SetHighlight(part, false);
+        }
+
+        /// <summary>Replaces the selection wholesale, as after a transform rebuilds every member.</summary>
+        public void SetTo(IEnumerable<PlacedPart> parts)
+        {
+            Clear();
+
+            foreach (PlacedPart part in parts)
+                Add(part);
         }
 
         /// <summary>Re-applies highlighting after instances are rebuilt, such as after an undo.</summary>

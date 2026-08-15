@@ -45,10 +45,14 @@ namespace BlockMarbleRun.Persistence
 
             BoundsInt bounds = map.OccupiedBounds;
 
+            World.Scenery scenery = World.Scenery.Active;
+
             return new SaveModel
             {
                 version = SaveModel.CurrentVersion,
                 name = name,
+                floorStyle = scenery != null ? (int)scenery.style : 0,
+                waterLevel = scenery != null ? scenery.waterLevel : 0.12f,
                 savedAtUnixSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 boundsMin = bounds.min,
                 boundsMax = bounds.max,
@@ -73,6 +77,16 @@ namespace BlockMarbleRun.Persistence
         {
             var report = new LoadReport();
             map.Clear();
+
+            // Restored before the parts, so a build that ends in water is already standing in it by
+            // the time the first piece appears rather than being flooded a frame later.
+            World.Scenery scenery = World.Scenery.Active;
+            if (scenery != null)
+            {
+                scenery.style = (World.FloorStyle)Mathf.Clamp(model.floorStyle, 0, 2);
+                scenery.waterLevel = Mathf.Max(0f, model.waterLevel);
+                scenery.Apply();
+            }
 
             var byId = new Dictionary<string, PartDefinition>(_catalog.parts.Count);
             foreach (PartDefinition def in _catalog.parts)

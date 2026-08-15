@@ -61,6 +61,14 @@ namespace BlockMarbleRun.CameraRig
         /// <summary>The subject's velocity, which is what Chase and Ride aim along.</summary>
         public Vector3 SubjectVelocity { get; set; }
 
+        /// <summary>
+        /// Stops the wheel dollying, for whoever else wants it.
+        ///
+        /// Placing a copied group uses the wheel to raise and lower it; without this the same turn of
+        /// the wheel would also pull the camera in, and the group would appear to move twice.
+        /// </summary>
+        public bool ZoomLocked { get; set; }
+
         /// <summary>How fast Chase swings round to a new heading, in degrees per second.</summary>
         [SerializeField] float headingSpeed = 220f;
 
@@ -118,7 +126,7 @@ namespace BlockMarbleRun.CameraRig
                     _targetPivot -= (transform.right * delta.x + transform.up * delta.y) * scale;
                 }
 
-                float scroll = mouse.scroll.ReadValue().y;
+                float scroll = ZoomLocked ? 0f : mouse.scroll.ReadValue().y;
                 if (Mathf.Abs(scroll) > 0.01f)
                 {
                     // Proportional zoom: a fixed step crawls when far out and overshoots when close in.

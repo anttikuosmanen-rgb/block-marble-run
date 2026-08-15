@@ -53,6 +53,8 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestStraightRampIsCarriedAtItsEndsOnly();
             TestLiftedSupportColumnGrows();
             TestLiftedGroundLevelTrackGetsSupports();
+            TestSelectionTurnsInPlace();
+            TestSelectionMirrorSwapsHandedParts();
             TestScaffoldingLeavesRoomForTheDescendingPiece();
 
             string summary = $"[GridSelfTest] {_passed} passed, {_failed} failed.\n{_log}";
@@ -999,6 +1001,107 @@ namespace BlockMarbleRun.EditorTools.Tests
             ScaffoldBuilder.ExtendLiftedColumns(map, moved, pillar);
 
             Check("the placed piece survives the propping", map.Contains(raised));
+        }
+
+        /// <summary>
+        /// Turning a selection four times puts every piece back exactly where it started.
+        ///
+        /// The strongest check available without hand-computing coordinates: any error in the corner
+        /// arithmetic accumulates, so four turns that close the loop means the pivot and the width
+        /// term are both right. Turning once and eyeballing one part would not catch a drift.
+        /// </summary>
+        static void TestSelectionTurnsInPlace()
+        {
+            PartDefinition ramp = FindDefinition("slide_2x4");
+            PartDefinition brick = FindDefinition("building_block_2x6");
+
+            if (ramp == null || brick == null)
+            {
+                Check("turn test parts exist", false);
+                return;
+            }
+
+            var map = new GridMap();
+
+            var a = new PlacedPart(ramp, new GridCoord(2, 3, 0), 0, 0);
+            var b = new PlacedPart(brick, new GridCoord(2, 7, 0), 1, 0);
+
+            map.Add(a);
+            map.Add(b);
+
+            var group = new List<PlacedPart> { a, b };
+            var expected = new List<(GridCoord origin, int rotation)> { (a.Origin, a.Rotation), (b.Origin, b.Rotation) };
+
+            for (int turn = 0; turn < 4; turn++)
+            {
+                List<PlacedPart> moved = SelectionOps.Rotate(map, group, 1);
+
+                Check($"turn {turn + 1} fits", moved != null);
+                if (moved == null)
+                    return;
+
+                foreach (PlacedPart part in group) map.Remove(part);
+                foreach (PlacedPart part in moved) map.Add(part);
+
+                group = moved;
+            }
+
+            for (int i = 0; i < group.Count; i++)
+            {
+                Check("four turns restore the origin", group[i].Origin.Equals(expected[i].origin),
+                    $"{group[i].Origin} vs {expected[i].origin}");
+
+                Check("four turns restore the rotation", group[i].Rotation == expected[i].rotation,
+                    $"{group[i].Rotation} vs {expected[i].rotation}");
+            }
+        }
+
+        /// <summary>
+        /// Mirroring swaps a chiral part for its opposite hand, and mirroring twice is the identity.
+        ///
+        /// Leaving the same part in place would look almost right - the mouths still line up - while
+        /// bending the wrong way, which is the kind of wrong that is only noticed once a ball runs.
+        /// </summary>
+        static void TestSelectionMirrorSwapsHandedParts()
+        {
+            PartDefinition curve = FindDefinition("slide_curve_4x4");
+            PartDefinition mirrored = FindDefinition("slide_curve_4x4_mirror");
+
+            if (curve == null || mirrored == null)
+            {
+                Check("mirror test parts exist", false);
+                return;
+            }
+
+            PartDefinition Twin(PartDefinition def) =>
+                def == curve ? mirrored : def == mirrored ? curve : def;
+
+            var map = new GridMap();
+            var part = new PlacedPart(curve, new GridCoord(1, 1, 0), 1, 0);
+            map.Add(part);
+
+            var group = new List<PlacedPart> { part };
+
+            List<PlacedPart> once = SelectionOps.Mirror(map, group, Twin);
+            Check("a curve can be mirrored", once != null);
+            if (once == null)
+                return;
+
+            Check("mirroring swaps in the other hand", once[0].Definition == mirrored,
+                once[0].Definition.id);
+
+            foreach (PlacedPart p in group) map.Remove(p);
+            foreach (PlacedPart p in once) map.Add(p);
+
+            List<PlacedPart> twice = SelectionOps.Mirror(map, once, Twin);
+            Check("it can be mirrored back", twice != null);
+            if (twice == null)
+                return;
+
+            Check("mirroring twice restores the part", twice[0].Definition == curve);
+            Check("mirroring twice restores the origin", twice[0].Origin.Equals(part.Origin),
+                $"{twice[0].Origin} vs {part.Origin}");
+            Check("mirroring twice restores the rotation", twice[0].Rotation == part.Rotation);
         }
     }
 }

@@ -47,10 +47,19 @@ namespace BlockMarbleRun.Play
             if (play == null || mode == null || mode.Current != Mode.Play)
                 return;
 
+            // Wrapped rather than scaled inline: the body has several early returns, and each one
+            // would otherwise have to remember to put the GUI matrix back.
+            BlockMarbleRun.Build.UiScale.Begin();
+            Draw();
+            BlockMarbleRun.Build.UiScale.End();
+        }
+
+        void Draw()
+        {
             _label ??= new GUIStyle(GUI.skin.label) { fontSize = 12, normal = { textColor = Color.white } };
 
             float width = 320f;
-            var area = new Rect(Screen.width - width - 12f, 12f, width, Screen.height - 24f);
+            var area = new Rect(BlockMarbleRun.Build.UiScale.Width - width - 12f, 12f, width, BlockMarbleRun.Build.UiScale.Height - 24f);
 
             if (!_open)
             {

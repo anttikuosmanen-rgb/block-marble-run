@@ -31,7 +31,7 @@ namespace BlockMarbleRun.Persistence
     public class SaveModel
     {
         /// <summary>Bump whenever the stored shape changes, and add a matching step in <see cref="SaveMigrations"/>.</summary>
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
 
         public int version = CurrentVersion;
         public string name = "Untitled";
@@ -41,6 +41,18 @@ namespace BlockMarbleRun.Persistence
         public Vector3Int boundsMax;
 
         public SavedPart[] parts = Array.Empty<SavedPart>();
+
+        /// <summary>
+        /// The world the build stands in: 0 grid, 1 sand, 2 water, and how deep the water is.
+        ///
+        /// Saved with the creation because a run built to end in water is not the same creation
+        /// without it - the water is as much a part of what was made as the bricks are. Older saves
+        /// have neither field and JsonUtility leaves them at these defaults, which is the grid the
+        /// build was made on.
+        /// </summary>
+        public int floorStyle;
+
+        public float waterLevel = 0.12f;
 
         public string ToJson() => JsonUtility.ToJson(this);
 
@@ -70,9 +82,13 @@ namespace BlockMarbleRun.Persistence
                 return model;
             }
 
-            // No steps yet. The role field was added without a version bump on purpose: JsonUtility
-            // leaves an absent field at its default, and "no role" is exactly what an older save
-            // means. A bump is for changes that cannot be read correctly without one.
+            // No steps needed so far, and both additions to date explain why. The role field was
+            // added without a bump at all: JsonUtility leaves an absent field at its default, and "no
+            // role" is exactly what an older save means. The floor and water level took a bump to v2
+            // because they are worth telling apart in a file - but they still read correctly without
+            // a step, since a v1 save was made on the grid and the grid is what the default says.
+            //
+            // A step is for a change that cannot be read correctly without one.
 
             // while (model.version < SaveModel.CurrentVersion) { ... step by step ... }
 

@@ -34,7 +34,7 @@ namespace BlockMarbleRun.Build
         /// click on a palette icon also places a brick in the world behind it.
         /// </summary>
         public bool Covers(Vector2 screenPosition) =>
-            Height > 0f && screenPosition.y >= Screen.height - Height;
+            Height > 0f && UiScale.ToGui(screenPosition).y >= UiScale.Height - Height;
 
         GUIStyle _iconStyle;
         GUIStyle _labelStyle;
@@ -48,13 +48,15 @@ namespace BlockMarbleRun.Build
             if (controller == null || controller.CatalogPartCount <= 0)
                 return;
 
+            UiScale.Begin();
+
             // Building only. The bar would be dead weight over a run in progress.
-            if (mode != null && mode.Current != BlockMarbleRun.Core.Mode.Play)
-                Draw();
-            else if (mode == null)
+            if (mode == null || mode.Current != BlockMarbleRun.Core.Mode.Play)
                 Draw();
             else
                 Height = 0f;
+
+            UiScale.End();
         }
 
         void Draw()
@@ -64,7 +66,7 @@ namespace BlockMarbleRun.Build
             PartCatalog catalog = controller.factory.Catalog;
 
             const float pad = 6f;
-            float available = Screen.width - pad * 2f;
+            float available = UiScale.Width - pad * 2f;
 
             // Fit the whole set to the window rather than assuming a size: take another row before
             // shrinking past legibility, and cap the icons so a wide window does not blow them up.
@@ -89,7 +91,7 @@ namespace BlockMarbleRun.Build
             float toolbar = 26f;
             Height = rows * (iconSize + pad) + pad + toolbar;
 
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Height), _barBackground);
+            GUI.DrawTexture(new Rect(0, 0, UiScale.Width, Height), _barBackground);
 
             DrawTools(pad, toolbar);
 

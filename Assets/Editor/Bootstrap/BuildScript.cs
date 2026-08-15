@@ -46,6 +46,8 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
 
         public static void BuildMacOS()
         {
+            Switch(BuildTargetGroup.Standalone, BuildTarget.StandaloneOSX);
+
             ScriptingImplementation backend = RequestedBackend;
             if (backend != ScriptingImplementation.IL2CPP)
                 Debug.LogWarning("[Build] BMR_SCRIPTING_BACKEND=mono - local smoke test only, not a shippable build.");
@@ -65,6 +67,8 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
 
         static void BuildWebGL(string outputPath, bool decompressionFallback)
         {
+            Switch(BuildTargetGroup.WebGL, BuildTarget.WebGL);
+
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.WebGL, ScriptingImplementation.IL2CPP);
             PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, ManagedStrippingLevel.High);
 
@@ -81,6 +85,27 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
                 target = BuildTarget.WebGL,
                 targetGroup = BuildTargetGroup.WebGL,
             });
+        }
+
+        /// <summary>
+        /// Makes the target active before anything is compiled for it.
+        ///
+        /// BuildPlayer switches the target itself, but too late: -executeMethod compiles the project
+        /// against whatever target was already active, so building for one platform straight after
+        /// another failed on code the first platform cannot see. It worked for a long time only
+        /// because WebGL happened to be the target left over from the previous session - a macOS
+        /// build in between was enough to break it.
+        /// </summary>
+        static void Switch(BuildTargetGroup group, BuildTarget target)
+        {
+            if (EditorUserBuildSettings.activeBuildTarget == target)
+                return;
+
+            if (!EditorUserBuildSettings.SwitchActiveBuildTarget(group, target))
+                throw new Exception($"Could not switch the active build target to {target}. " +
+                                    "The platform module is most likely not installed.");
+
+            Debug.Log($"[Build] Switched active build target to {target}.");
         }
 
         static void Run(BuildPlayerOptions options)

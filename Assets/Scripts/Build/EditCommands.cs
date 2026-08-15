@@ -383,6 +383,99 @@ namespace BlockMarbleRun.Build
     }
 
     /// <summary>
+    /// Adds a group of parts that were copied from elsewhere, propping whatever floats.
+    ///
+    /// The pillars are built once the whole group is down, not piece by piece as it goes in: a run
+    /// scaffolded part by part would prop the second piece against nothing, since the first has no
+    /// support under it yet and the third has not arrived. They are tracked separately from the
+    /// pasted parts so undo can take back exactly what this command added and no more.
+    /// </summary>
+    public sealed class PasteCommand : IEditCommand
+    {
+        readonly GridMap _map;
+        readonly List<PlacedPart> _parts;
+        readonly Parts.PartDefinition _pillar;
+        readonly System.Func<PlacedPart, GameObject> _spawn;
+
+        readonly List<PlacedPart> _supports = new();
+
+        public PasteCommand(GridMap map, List<PlacedPart> parts, Parts.PartDefinition pillar,
+                            System.Func<PlacedPart, GameObject> spawn)
+        {
+            _map = map;
+            _parts = parts;
+            _pillar = pillar;
+            _spawn = spawn;
+        }
+
+        public int SupportCount => _supports.Count;
+
+        public bool Do()
+        {
+            foreach (PlacedPart part in _parts)
+                if (_map.At(part.Origin) != null)
+                    return false;
+
+            foreach (PlacedPart part in _parts)
+                if (_map.Add(part))
+                    part.Instance = _spawn(part);
+
+            if (_pillar == null)
+                return true;
+
+            foreach (PlacedPart part in _parts)
+            {
+                if (!part.HasPorts)
+                    continue;
+
+                foreach (PlacedPart support in ScaffoldBuilder.BuildSupports(_map, part, _pillar))
+                {
+                    support.Instance = _spawn(support);
+                    _supports.Add(support);
+                }
+            }
+
+            // And the bricks that came along in the copy. A selection usually includes the pillars
+            // that were holding it up, and those arrive at the same height above the ground as they
+            // left - which, pasted anywhere higher, leaves them hanging. Only new pillars were being
+            // built, so the copy stood on fresh supports beside a column of its own that reached
+            // nothing.
+            foreach (PlacedPart support in ScaffoldBuilder.ExtendLiftedColumns(_map, _parts, _pillar))
+            {
+                support.Instance = _spawn(support);
+                _supports.Add(support);
+            }
+
+            return true;
+        }
+
+        public void Undo()
+        {
+            foreach (PlacedPart support in _supports)
+            {
+                _map.Remove(support);
+
+                if (support.Instance != null)
+                    Object.Destroy(support.Instance);
+
+                support.Instance = null;
+            }
+
+            _supports.Clear();
+
+            foreach (PlacedPart part in _parts)
+            {
+                _map.Remove(part);
+
+                if (part.Instance != null)
+                    Object.Destroy(part.Instance);
+
+                part.Instance = null;
+            }
+        }
+    }
+
+    /// <summary>
     /// Lifts the whole build and places a piece in the room that makes, as one action.
     ///
     /// Growing and placing were two clicks before, which read as the build lurching upward for no

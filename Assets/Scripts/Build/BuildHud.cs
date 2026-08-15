@@ -76,7 +76,7 @@ namespace BlockMarbleRun.Build
 
             string report = BlockMarbleRun.Grid.ScaffoldBuilder.Report;
 
-            GUILayout.BeginArea(new Rect(Screen.width - 392f, top, 380f, 320f));
+            GUILayout.BeginArea(new Rect(UiScale.Width - 392f, top, 380f, 320f));
             GUILayout.Label("[Scaffold] J to turn off", _style);
             GUILayout.Label(string.IsNullOrEmpty(report) ? "place a channel piece..." : report, _style);
             GUILayout.EndArea();
@@ -96,7 +96,7 @@ namespace BlockMarbleRun.Build
                 return;
 
             const float width = 380f;
-            GUILayout.BeginArea(new Rect((Screen.width - width) * 0.5f, Screen.height - 62f, width, 54f));
+            GUILayout.BeginArea(new Rect((UiScale.Width - width) * 0.5f, UiScale.Height - 62f, width, 54f));
 
             GUILayout.Label($"Water level {scenery.WaterLayers:0.0} layers   ({scenery.waterLevel:0.000} units)",
                             _style);
@@ -114,6 +114,8 @@ namespace BlockMarbleRun.Build
             if (controller == null)
                 return;
 
+            UiScale.Begin();
+
             _style ??= new GUIStyle(GUI.skin.label)
             {
                 fontSize = 13,
@@ -128,13 +130,14 @@ namespace BlockMarbleRun.Build
             // Down to the bottom of the window rather than a fixed 300. An area clips its contents,
             // and the help text had already grown past that height - anything added to the end was
             // drawn outside the box and simply never appeared.
-            GUILayout.BeginArea(new Rect(12, top, 640, Mathf.Max(300f, Screen.height - top - 12f)));
+            GUILayout.BeginArea(new Rect(12, top, 640, Mathf.Max(300f, UiScale.Height - top - 12f)));
 
             if (playing)
             {
                 DrawPlay();
                 GUILayout.EndArea();
                 DrawWaterPanel();
+                UiScale.End();
                 return;
             }
 
@@ -176,7 +179,25 @@ namespace BlockMarbleRun.Build
             if (controller.Precise)
                 GUILayout.Label("PRECISE - sliding stud by stud, R still turns / cycles joins", _style);
             GUILayout.Label("Left click place    Shift precise    V grab (click picks, drag selects)    Del remove", _style);
-            GUILayout.Label("S save    L load    + / - raise or lower a structure", _style);
+
+            if (controller.Pasting)
+            {
+                GUILayout.Label(
+                    $"PLACING {controller.PastingCount} piece(s) - " +
+                    (controller.PasteFits ? "click to place" : "will not fit here"), _style);
+
+                GUILayout.Label("Move to position    R turn    M mirror    + / - raise or lower    right click cancel",
+                                _style);
+            }
+            else if (controller.CurrentTool == BuildController.Tool.Grab)
+            {
+                GUILayout.Label($"GRAB - {controller.Selection?.Count ?? 0} selected    " +
+                                "A select all    shift click to add    R turn    M mirror", _style);
+                GUILayout.Label("Cmd/Ctrl C copy    Cmd/Ctrl V paste under the cursor    Del remove", _style);
+            }
+            GUILayout.Label("S save (stamped with the time)    L saved creations    + / - raise or lower a structure" +
+                            (string.IsNullOrEmpty(controller.LastTyped) ? "" : $"    (last key: {controller.LastTyped})"),
+                            _style);
             GUILayout.Label("Right drag orbit    Middle drag pan    Scroll zoom", _style);
             GUILayout.Label("F frame build    Home origin    Cmd+Z undo    Shift+Cmd+Z redo", _style);
             GUILayout.Label("Tab play mode    B floor: grid / sand / water", _style);
@@ -193,7 +214,11 @@ namespace BlockMarbleRun.Build
             DrawScaffoldLog(top);
             DrawWaterPanel();
 
+            // Inside the scaled matrix, not after it: the rectangle is converted into GUI space, so
+            // drawing it once the matrix has been put back lands it at a fraction of its position.
             DrawSelectionBox();
+
+            UiScale.End();
         }
 
         /// <summary>
@@ -259,7 +284,11 @@ namespace BlockMarbleRun.Build
             if (rect.width <= 0f && rect.height <= 0f)
                 return;
 
-            var flipped = new Rect(rect.x, Screen.height - rect.yMax, rect.width, rect.height);
+            // Divided into GUI space: the rectangle is measured in pointer pixels while the matrix
+            // this is drawn through is scaled, so an unconverted rect lands somewhere else entirely.
+            rect = new Rect(UiScale.ToGui(rect.position), UiScale.ToGui(rect.size));
+
+            var flipped = new Rect(rect.x, UiScale.Height - rect.yMax, rect.width, rect.height);
 
             Color previous = GUI.color;
             GUI.color = new Color(0.35f, 0.75f, 1f, 0.18f);

@@ -6,6 +6,7 @@ using BlockMarbleRun.Persistence;
 using BlockMarbleRun.World;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 
 namespace BlockMarbleRun.Build
 {
@@ -65,6 +66,12 @@ namespace BlockMarbleRun.Build
 
         public void SetTool(Tool tool)
         {
+            // Leaving the grab tool drops the selection. It used to survive, and since a selection is
+            // drawn by tinting the pieces, that read as having painted them - the tint stayed on the
+            // build with no tool on screen that could explain or remove it.
+            if (CurrentTool == Tool.Grab && tool != Tool.Grab)
+                _selection?.Clear();
+
             CurrentTool = tool;
             if (tool != Tool.Place)
                 ghost.Hide();
@@ -157,6 +164,12 @@ namespace BlockMarbleRun.Build
 
             ReadKeys();
 
+            if (orbitCamera != null)
+                orbitCamera.ZoomLocked = Pasting;
+
+            if (UpdatePaste())
+                return;
+
             if (UpdateBoxSelect())
                 return;
 
@@ -217,13 +230,69 @@ namespace BlockMarbleRun.Build
             Mathf.Min(a.x, b.x), Mathf.Min(a.y, b.y),
             Mathf.Max(a.x, b.x), Mathf.Max(a.y, b.y));
 
+        // Characters actually typed this frame, as the OS and the browser report them.
+        readonly List<char> _typed = new();
+        System.Action<char> _textHandler;
+
+        /// <summary>The last character seen, for the HUD - so a key that does nothing can be diagnosed.</summary>
+        public string LastTyped { get; private set; } = "";
+
+        void OnEnable()
+        {
+            _textHandler = character =>
+            {
+                _typed.Add(character);
+                LastTyped = character.ToString();
+            };
+
+            if (Keyboard.current != null)
+                Keyboard.current.onTextInput += _textHandler;
+        }
+
+        void OnDisable()
+        {
+            if (Keyboard.current != null && _textHandler != null)
+                Keyboard.current.onTextInput -= _textHandler;
+        }
+
+        void LateUpdate() => _typed.Clear();
+
+        /// <summary>
+        /// +1, -1 or 0, from the character the key produced rather than from where the key sits.
+        ///
+        /// Three readings of this have now been wrong, each for its own reason. Named keys like
+        /// equalsKey are positions on a US layout, not characters. displayName turned out to report
+        /// the US-position character too, so on a Nordic keyboard the key marked plus read as minus
+        /// and lowered what it was meant to raise, while the key marked minus read as slash and did
+        /// nothing at all. Text input is the only source that knows what the player actually typed,
+        /// because it is the one the operating system fills in after applying the layout.
+        /// </summary>
+        int LiftKey(Keyboard keyboard)
+        {
+            if (keyboard.numpadPlusKey.wasPressedThisFrame) return 1;
+            if (keyboard.numpadMinusKey.wasPressedThisFrame) return -1;
+
+            foreach (char character in _typed)
+            {
+                if (character == '+') return 1;
+                if (character == '-') return -1;
+            }
+
+            return 0;
+        }
+
+        static bool Held(Keyboard keyboard) =>
+            keyboard.leftCtrlKey.isPressed || keyboard.leftCommandKey.isPressed ||
+            keyboard.rightCtrlKey.isPressed || keyboard.rightCommandKey.isPressed;
+
         void ReadKeys()
         {
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null)
                 return;
 
-            if (keyboard.rKey.wasPressedThisFrame)
+            if (keyboard.rKey.wasPressedThisFrame && !Pasting &&
+                !(CurrentTool == Tool.Grab && _selection.Count > 0))
             {
                 // A channel piece beside an open mouth is placed by its joint, not its facing:
                 // turning it a quarter at a time is meaningless when the solver re-faces it anyway,
@@ -244,7 +313,8 @@ namespace BlockMarbleRun.Build
                     RelockAfterTurn();
             }
 
-            if (keyboard.cKey.wasPressedThisFrame)
+            // Guarded against the copy shortcut, which is the same key with a modifier.
+            if (keyboard.cKey.wasPressedThisFrame && !Held(keyboard))
                 _colorIndex = (byte)((_colorIndex + 1) % Mathf.Max(1, factory.Catalog.palette.Length));
 
             if (keyboard.qKey.wasPressedThisFrame)
@@ -259,8 +329,9 @@ namespace BlockMarbleRun.Build
             if (keyboard.homeKey.wasPressedThisFrame)
                 orbitCamera.ReturnToOrigin();
 
-            bool control = keyboard.leftCtrlKey.isPressed || keyboard.leftCommandKey.isPressed ||
-                           keyboard.rightCtrlKey.isPressed || keyboard.rightCommandKey.isPressed;
+            bool control = Held(keyboard);
+
+            ReadSelectionKeys(keyboard, control);
 
             if (control && keyboard.zKey.wasPressedThisFrame)
             {
@@ -280,19 +351,26 @@ namespace BlockMarbleRun.Build
             if (keyboard.sKey.wasPressedThisFrame)
                 _ = SaveAsync();
 
-            if (keyboard.lKey.wasPressedThisFrame)
-                _ = LoadAsync();
+            // L opens the browser rather than loading anything: with saves named by their moment
+            // there is no one obvious creation to reopen, and picking the newest silently would be
+            // wrong exactly when the player wants an older one.
+            if (keyboard.lKey.wasPressedThisFrame && browser != null)
+                browser.Toggle();
 
             if (keyboard.xKey.wasPressedThisFrame)
                 CycleRoleUnderCursor();
 
             // Raising and lowering a structure. Not shift+click as first suggested: shift now holds a
             // placement steady, and a modifier that means two things is a modifier that surprises.
-            if (keyboard.equalsKey.wasPressedThisFrame || keyboard.numpadPlusKey.wasPressedThisFrame)
-                MoveAssemblyUnderCursor(1);
+            // A group being placed owns the keys that would otherwise move the build or change tool.
+            // Raising in particular would act on whatever is under the cursor rather than on the held
+            // group - and since a preview carries no collider, that is the build showing through it.
+            if (Pasting)
+                return;
 
-            if (keyboard.minusKey.wasPressedThisFrame || keyboard.numpadMinusKey.wasPressedThisFrame)
-                MoveAssemblyUnderCursor(-1);
+            int structureLift = LiftKey(keyboard);
+            if (structureLift != 0)
+                MoveAssemblyUnderCursor(structureLift);
 
             if (keyboard.vKey.wasPressedThisFrame)
                 SetTool(CurrentTool == Tool.Place ? Tool.Grab : Tool.Place);
@@ -349,6 +427,268 @@ namespace BlockMarbleRun.Build
         /// Picks the piece under the cursor into the selection, so it can be deleted, inspected or
         /// added to. Holding shift adds rather than replaces, matching the box-select behaviour.
         /// </summary>
+        // --- selection editing ---------------------------------------------------------------
+
+        List<PlacedPart> _clipboard;
+
+        /// <summary>Turns, mirrors, copies and pastes. Only meaningful with something selected.</summary>
+        void ReadSelectionKeys(Keyboard keyboard, bool control)
+        {
+            // A held paste reads R and M for itself.
+            if (CurrentTool != Tool.Grab || Pasting)
+                return;
+
+            if (control && keyboard.cKey.wasPressedThisFrame)
+            {
+                _clipboard = SelectionOps.Duplicate(_selection.Parts);
+                Status = _clipboard.Count > 0 ? $"Copied {_clipboard.Count}" : "Nothing selected";
+                return;
+            }
+
+            if (control && keyboard.vKey.wasPressedThisFrame)
+            {
+                EnsurePasteSession();
+                Paste();
+                return;
+            }
+
+            // Plain A as well as Cmd/Ctrl A: the browser claims the modified one for "select all" on
+            // the page before the canvas sees it, the same reason save and load are unmodified keys.
+            if (keyboard.aKey.wasPressedThisFrame)
+            {
+                _selection.SetTo(_map.Parts);
+                Status = $"Selected all {_selection.Count}";
+                return;
+            }
+
+            if (_selection.Count == 0)
+                return;
+
+            if (keyboard.rKey.wasPressedThisFrame)
+                Transform(SelectionOps.Rotate(_map, _selection.Parts, 1), "Turned");
+
+            if (keyboard.mKey.wasPressedThisFrame)
+                Transform(SelectionOps.Mirror(_map, _selection.Parts, MirrorTwin), "Mirrored");
+        }
+
+        /// <summary>
+        /// Swaps a chiral part for its opposite hand.
+        ///
+        /// Found through the catalog in both directions: a generated mirror names its source, and the
+        /// source names nothing, so the reverse lookup is a search rather than a field.
+        /// </summary>
+        PartDefinition MirrorTwin(PartDefinition def)
+        {
+            if (def == null)
+                return null;
+
+            if (def.IsMirror)
+            {
+                foreach (PartDefinition other in factory.Catalog.parts)
+                    if (other != null && other.id == def.mirrorOf)
+                        return other;
+
+                return def;
+            }
+
+            foreach (PartDefinition other in factory.Catalog.parts)
+                if (other != null && other.mirrorOf == def.id)
+                    return other;
+
+            // Symmetric parts are their own mirror, which is why nothing was generated for them.
+            return def;
+        }
+
+        void Transform(List<PlacedPart> moved, string verb)
+        {
+            if (moved == null)
+            {
+                Status = $"Cannot be {verb.ToLowerInvariant()} here - something is in the way";
+                return;
+            }
+
+            var before = new List<PlacedPart>(_selection.Parts);
+
+            // The originals are about to be destroyed, and their tint is not something the
+            // replacements inherit - so it comes off while the originals still exist to take it off.
+            _selection.ClearHighlights();
+
+            // No pillar: propping a selection the player is turning would add bricks they never asked
+            // for, on every single turn.
+            var command = new MoveAssemblyCommand(_map, before, moved, null, Spawn);
+
+            if (!_history.Execute(command))
+            {
+                Status = $"Could not be {verb.ToLowerInvariant()}";
+                return;
+            }
+
+            _selection.SetTo(moved);
+            Status = $"{verb} {moved.Count}";
+        }
+
+        PasteSession _paste;
+
+        Vector2 _pasteMouseDownAt;
+        bool _pasteDragged;
+
+        /// <summary>True while a copied group is being carried, waiting for a click to commit it.</summary>
+        public bool Pasting => _paste is { Active: true };
+
+        public int PastingCount => _paste?.Parts.Count ?? 0;
+        public bool PasteFits => _paste is { Fits: true };
+
+        /// <summary>
+        /// Picks the group up rather than dropping it. The click that follows decides where it lands.
+        /// </summary>
+        void Paste()
+        {
+            if (_clipboard == null || _clipboard.Count == 0)
+            {
+                Status = "Nothing copied";
+                return;
+            }
+
+            _selection.Clear();
+            _paste.Begin(SelectionOps.Duplicate(_clipboard));
+
+            Mouse mouse = Mouse.current;
+            BuildHit hit = mouse != null ? raycaster.RaycastPlacement(mouse.position.ReadValue()) : default;
+
+            if (hit.Valid)
+                _paste.MoveTo(_map, hit.Cell);
+            else
+                _paste.Refresh(_map);
+
+            Status = "Placing - move to position, R turn, M mirror, click to place, right click to cancel";
+        }
+
+        /// <summary>
+        /// Carries the held group under the cursor, and commits it on a click.
+        ///
+        /// Runs before the ordinary placement pass and swallows the click, so the piece on the
+        /// palette is not also placed by the same press.
+        /// </summary>
+        bool UpdatePaste()
+        {
+            if (!Pasting)
+                return false;
+
+            Keyboard keyboard = Keyboard.current;
+            Mouse mouse = Mouse.current;
+
+            ghost.Hide();
+
+            if (mouse == null)
+                return true;
+
+            // Right click cancels, right drag still orbits. Escape cannot be the cancel here: the
+            // browser takes it first to leave full screen, so in the build that matters it would look
+            // as though nothing had happened.
+            if (mouse.rightButton.wasPressedThisFrame)
+            {
+                _pasteMouseDownAt = mouse.position.ReadValue();
+                _pasteDragged = false;
+            }
+
+            if (mouse.rightButton.isPressed &&
+                (mouse.position.ReadValue() - _pasteMouseDownAt).sqrMagnitude > 25f)
+                _pasteDragged = true;
+
+            if (mouse.rightButton.wasReleasedThisFrame && !_pasteDragged)
+            {
+                _paste.Cancel();
+                Status = "Paste cancelled";
+                return true;
+            }
+
+            // Turning and mirroring while held, which is the whole point of holding it: the group can
+            // be aimed at the join it is going to before anything is committed.
+            if (keyboard != null && keyboard.rKey.wasPressedThisFrame)
+            {
+                List<PlacedPart> turned = SelectionOps.Rotate(_map, _paste.Parts, 1) ??
+                                          RotateFreely(_paste.Parts);
+
+                _paste.Begin(turned);
+                _paste.Refresh(_map);
+            }
+
+            if (keyboard != null && keyboard.mKey.wasPressedThisFrame)
+            {
+                List<PlacedPart> flipped = SelectionOps.Mirror(_map, _paste.Parts, MirrorTwin) ??
+                                           MirrorFreely(_paste.Parts);
+
+                _paste.Begin(flipped);
+                _paste.Refresh(_map);
+            }
+
+            int lift = 0;
+
+            if (keyboard != null)
+                lift = LiftKey(keyboard);
+
+            // The wheel too, and it takes precedence over zooming while a group is held. Which
+            // physical key carries + and - depends on the keyboard layout, and the Input System reads
+            // keys by position rather than by the character printed on them - so on a Nordic layout
+            // the key marked + is the one it calls minus. The wheel has no layout.
+            float scroll = mouse.scroll.ReadValue().y;
+            if (Mathf.Abs(scroll) > 0.01f)
+                lift = scroll > 0f ? 1 : -1;
+
+            if (lift != 0)
+                _paste.Nudge(_map, 0, 0, lift);
+
+            if (!mouse.rightButton.isPressed && !mouse.middleButton.isPressed)
+            {
+                BuildHit hit = raycaster.RaycastPlacement(mouse.position.ReadValue());
+                if (hit.Valid)
+                    _paste.MoveTo(_map, hit.Cell);
+            }
+
+            if (!mouse.leftButton.wasPressedThisFrame)
+                return true;
+
+            if (!_paste.Fits)
+            {
+                Status = "Will not fit there";
+                return true;
+            }
+
+            List<PlacedPart> placed = _paste.Take();
+
+            if (_history.Execute(new PasteCommand(_map, placed, PillarDefinition, Spawn)))
+            {
+                // Deliberately not left selected. A selection is drawn by tinting the pieces, so
+                // keeping the group selected after it lands means every paste leaves coloured-looking
+                // bricks behind - which is indistinguishable from having painted them.
+                _selection.Clear();
+
+                _clipboard = SelectionOps.Duplicate(placed);
+                Status = $"Placed {placed.Count} - Cmd/Ctrl V again to place another";
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Turning a held group ignores what is in the way.
+        ///
+        /// SelectionOps refuses a transform that will not fit, which is right for parts already in
+        /// the build. A group in the air is not in the build yet, and refusing to turn it because its
+        /// current position happens to clash would make it unturnable exactly where turning is what
+        /// the player is trying to do.
+        /// </summary>
+        static List<PlacedPart> RotateFreely(List<PlacedPart> parts) =>
+            SelectionOps.Rotate(null, parts, 1, checkFit: false);
+
+        List<PlacedPart> MirrorFreely(List<PlacedPart> parts) =>
+            SelectionOps.Mirror(null, parts, MirrorTwin, checkFit: false);
+
+        void EnsurePasteSession()
+        {
+            _paste ??= new PasteSession(factory, partRoot, ghost != null ? ghost.ghostMaterial : null);
+        }
+
         void GrabUnderCursor(Vector2 screen)
         {
             BuildHit hit = raycaster.RaycastPick(screen);
@@ -526,12 +866,25 @@ namespace BlockMarbleRun.Build
 
         // --- persistence ---------------------------------------------------------------------
 
-        public string SlotName = "My Creation";
+        /// <summary>
+        /// The creation last saved or loaded. Shown in the HUD; not where a new save goes.
+        ///
+        /// Saving used to write here every time, so there was only ever one creation and every S
+        /// silently replaced it. A save now names itself by the moment it was taken, which needs no
+        /// prompt, cannot collide, and sorts correctly on its own.
+        /// </summary>
+        public string SlotName = "(none)";
 
         [Tooltip("Brick used to prop up parts placed in mid-air. Falls back to the first block in the catalog.")]
         public string pillarPartId = "building_block_2x2";
 
         PartDefinition _pillar;
+
+        /// <summary>Opened with L. Assigned by the scene builder.</summary>
+        public SaveBrowser browser;
+
+        /// <summary>Saves available to the browser.</summary>
+        public SaveService Service => _saves;
 
         /// <summary>The brick auto-scaffolding is built from (DESIGN.md §5.1).</summary>
         PartDefinition PillarDefinition
@@ -562,15 +915,18 @@ namespace BlockMarbleRun.Build
             Busy = true;
             Status = "Saving...";
 
+            string slot = System.DateTime.Now.ToString("yyyy-MM-dd HH-mm-ss");
+
             try
             {
-                await _saves.SaveAsync(_map, SlotName);
+                await _saves.SaveAsync(_map, slot);
 
                 // Captured after the save so a failed write never leaves a thumbnail without a
                 // creation behind it.
-                await _saves.SaveThumbnailAsync(SlotName, raycaster.Camera);
+                await _saves.SaveThumbnailAsync(slot, raycaster.Camera);
 
-                Status = $"Saved '{SlotName}' ({_map.Parts.Count} parts)";
+                SlotName = slot;
+                Status = $"Saved '{slot}' ({_map.Parts.Count} parts)";
             }
             catch (System.Exception e)
             {
@@ -583,7 +939,8 @@ namespace BlockMarbleRun.Build
             }
         }
 
-        async Awaitable LoadAsync()
+        /// <summary>Opens a saved creation by name. The browser calls this; L opens the browser.</summary>
+        public async Awaitable LoadAsync(string slot)
         {
             if (Busy || _saves == null)
                 return;
@@ -593,12 +950,14 @@ namespace BlockMarbleRun.Build
 
             try
             {
-                SaveModel model = await _saves.LoadAsync(SlotName);
+                SaveModel model = await _saves.LoadAsync(slot);
                 if (model == null)
                 {
-                    Status = $"No save named '{SlotName}'";
+                    Status = $"No save named '{slot}'";
                     return;
                 }
+
+                SlotName = slot;
 
                 _selection.Clear();
                 ClearInstances();

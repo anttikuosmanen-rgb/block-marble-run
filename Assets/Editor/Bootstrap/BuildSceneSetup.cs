@@ -184,6 +184,10 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             director.pickCamera = cam;
 
             hud.director = director;
+
+            var browser = systems.AddComponent<SaveBrowser>();
+            browser.controller = controller;
+            controller.browser = browser;
             hud.palette = palette;
 
             foreach (Component component in systems.GetComponents<Component>())
