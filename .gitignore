@@ -52,3 +52,7 @@ sysinfo.txt
 *.mdb.meta
 
 crashlytics-build.properties
+
+# Source meshes dropped at the repo root. The project imports its own copies from
+# Assets/Art/Meshes, so tracking these too doubles the repository for no gain.
+/*.stl
