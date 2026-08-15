@@ -99,6 +99,16 @@ namespace BlockMarbleRun.Parts
         [Tooltip("Baked preview for the palette. See PartIconBaker.")]
         public Texture2D icon;
 
+        /// <summary>
+        /// Whether the part is offered in the palette.
+        ///
+        /// A part can be needed without being wanted on the bar. Every brick has a plate, but only
+        /// the 2x2 is worth a slot - the rest exist so the scaffolder can reach for one and so a
+        /// creation that used one still loads. Leaving them out of the catalog entirely would break
+        /// both; leaving them in the palette makes the bar mostly plates.
+        /// </summary>
+        public bool selectable = true;
+
         [Header("Grid")]
         [Tooltip("Footprint bounding size in studs.")]
         public Vector2Int footprintSize = Vector2Int.one;

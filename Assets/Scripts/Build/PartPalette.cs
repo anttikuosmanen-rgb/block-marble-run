@@ -70,7 +70,7 @@ namespace BlockMarbleRun.Build
 
             // Fit the whole set to the window rather than assuming a size: take another row before
             // shrinking past legibility, and cap the icons so a wide window does not blow them up.
-            int count = Mathf.Max(1, catalog.parts.Count);
+            int count = Mathf.Max(1, catalog.Selectable.Count);
             int rows = 1;
             int perRow = count;
             float iconSize = 0f;
@@ -95,9 +95,9 @@ namespace BlockMarbleRun.Build
 
             DrawTools(pad, toolbar);
 
-            for (int i = 0; i < catalog.parts.Count; i++)
+            for (int i = 0; i < catalog.Selectable.Count; i++)
             {
-                PartDefinition def = catalog.parts[i];
+                PartDefinition def = catalog.Selectable[i];
                 if (def == null)
                     continue;
 

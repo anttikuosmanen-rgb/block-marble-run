@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da6a0d617f2b5439583cb3af12660b6f, type: 3}
+  m_Name: funnel_6x7_mirror
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartDefinition
+  id: funnel_6x7_mirror
+  displayName: Funnel 6X7 (mirrored)
+  category: 3
+  mesh: {fileID: 4300000, guid: 6d7bba68832a7481abc7f9c802941581, type: 2}
+  colliderPrefab: {fileID: 0}
+  icon: {fileID: 2800000, guid: 60efea3c92ce042b5bd064cccff67dc6, type: 3}
+  selectable: 1
+  footprintSize: {x: 6, y: 7}
+  footprintMask: 010101010101010101010101010101010101010101010101000101010101010101010101010100000000
+  layerMasks: 000001010100010101010101010101010101010101010101000001010100010101010100010100000000000101010100010101010101010101010101010101010101000101010101010101010100000000000000010101010101010100000001010000000001010000000001000000000101010101010101000000000000
+  heightLayers: 3
+  pivotOffsetUnits: {x: -0.0005000152, y: 0.080500014}
+  hasTunnel: 1
+  topStuds: 000000000000000000000000000000000000000000000000000000000000000000000000010100000000
+  bottomSockets: 000001010000000001010000010101010101010101010101000001010000010101010000010101010100
+  rotation: 0
+  ports: []
+  centerline: []
+  mirrorOf: funnel_6x7
+  mirrorVerdict: 2

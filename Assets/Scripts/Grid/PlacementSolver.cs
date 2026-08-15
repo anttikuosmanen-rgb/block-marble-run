@@ -52,6 +52,107 @@ namespace BlockMarbleRun.Grid
         /// its partner, which fixes the rotation, and its centre line and floor must coincide with the
         /// partner's, which fixes the position and the layer.
         /// </summary>
+        /// <summary>
+        /// Placements that put a studded part directly under an open channel mouth.
+        ///
+        /// Not every part that belongs on the end of a run has a mouth of its own. A funnel is caught
+        /// by its shelf: the channel piece keeps its own antistuds and clutches down onto the studs,
+        /// overhanging the bowl so the ball runs off the end into it. With only mouth-to-mouth
+        /// matings on offer, bringing a funnel up to a run produced nothing at all and the player was
+        /// left to line it up by eye.
+        ///
+        /// A channel floor sits 6.4 mm above its part's base, which is less than one layer, so the
+        /// mouth's floor layer is the owning part's base layer - and that is the layer this part's
+        /// studs have to reach.
+        /// </summary>
+        public static List<PlacedPart> StudMatingsWith(GridMap map, PartDefinition def, byte colorIndex,
+                                                       PlacedPart.WorldPort target)
+        {
+            var matings = new List<PlacedPart>();
+
+            if (def.topStuds == null || def.topStuds.Length == 0)
+                return matings;
+
+            bool alongX = target.Facing is Facing.North or Facing.South;
+
+            int centreAlong = (alongX ? target.MidlineHalfStuds.x : target.MidlineHalfStuds.y) / 2;
+            int across = (alongX ? target.MidlineHalfStuds.y : target.MidlineHalfStuds.x) / 2;
+
+            int width = Mathf.Max(1, target.WidthStuds);
+            int alongMin = centreAlong - width / 2;
+
+            // The cells the channel itself stands on, just inside its own mouth.
+            int inside = target.Facing is Facing.North or Facing.East ? across - 1 : across;
+
+            for (int rotation = 0; rotation < 4; rotation++)
+            {
+                var probe = new PlacedPart(def, new GridCoord(0, 0, 0), rotation, colorIndex);
+                Vector2Int size = probe.RotatedSize;
+
+                for (int sy = 0; sy < size.y; sy++)
+                for (int sx = 0; sx < size.x; sx++)
+                {
+                    if (!probe.HasTopStudAt(sx, sy))
+                        continue;
+
+                    int studLayer = probe.TopLayerAt(sx, sy);
+
+                    for (int i = 0; i < width; i++)
+                    {
+                        int along = alongMin + i;
+
+                        Vector2Int wanted = alongX
+                            ? new Vector2Int(along, inside)
+                            : new Vector2Int(inside, along);
+
+                        var origin = new GridCoord(wanted.x - sx, wanted.y - sy,
+                                                   target.FloorLayer - studLayer);
+
+                        if (origin.layer < 0)
+                            continue;
+
+                        var candidate = new PlacedPart(def, origin, rotation, colorIndex);
+
+                        // Every cell of the mouth has to land on a stud, at the height the channel's
+                        // own base sits at. Matching a single stud was enough at first and offered
+                        // the piece turned across the run, caught by one corner - which lines up on
+                        // screen and carries nothing.
+                        bool carriesTheMouth = true;
+
+                        for (int k = 0; k < width && carriesTheMouth; k++)
+                        {
+                            int alongK = alongMin + k;
+
+                            Vector2Int cell = alongX
+                                ? new Vector2Int(alongK, inside)
+                                : new Vector2Int(inside, alongK);
+
+                            carriesTheMouth = candidate.HasTopStudAt(cell.x, cell.y) &&
+                                              candidate.TopLayerAt(cell.x, cell.y) == target.FloorLayer;
+                        }
+
+                        if (!carriesTheMouth)
+                            continue;
+
+                        if (map.CanPlace(candidate) != PlacementResult.Blocked && !Already(matings, candidate))
+                            matings.Add(candidate);
+                    }
+                }
+            }
+
+            return matings;
+        }
+
+        /// <summary>Whether an identical placement is already on offer, so R steps through distinct ones.</summary>
+        static bool Already(List<PlacedPart> matings, PlacedPart candidate)
+        {
+            foreach (PlacedPart existing in matings)
+                if (existing.Rotation == candidate.Rotation && existing.Origin.Equals(candidate.Origin))
+                    return true;
+
+            return false;
+        }
+
         public static List<PlacedPart> MatingsWith(GridMap map, PartDefinition def, byte colorIndex,
                                                    PlacedPart.WorldPort target, bool allowBelowGround = false)
         {

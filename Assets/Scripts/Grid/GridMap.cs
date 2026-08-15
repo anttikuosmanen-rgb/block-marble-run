@@ -59,7 +59,7 @@ namespace BlockMarbleRun.Grid
             {
                 PlacedPart part = _cells.GetValueOrDefault(new GridCoord(x, y, layer));
                 if (part != null)
-                    return part.TopLayer;
+                    return part.TopLayerAt(x, y);
             }
 
             return 0;
@@ -174,7 +174,8 @@ namespace BlockMarbleRun.Grid
 
                 // The supporting part must actually end at this layer; a tall part passing through
                 // the cell below offers its side, not its top.
-                if (below.TopLayer == part.Origin.layer && below.HasTopStudAt(cell.x, cell.y))
+                if (below.TopLayerAt(cell.x, cell.y) == part.Origin.layer &&
+                    below.HasTopStudAt(cell.x, cell.y))
                     return true;
             }
 

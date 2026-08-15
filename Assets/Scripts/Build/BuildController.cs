@@ -155,7 +155,7 @@ namespace BlockMarbleRun.Build
 
         /// <summary>Surfaced for the HUD, so a missing catalog is visible rather than silently inert.</summary>
         public int CatalogPartCount =>
-            factory != null && factory.Catalog != null ? factory.Catalog.parts.Count : -1;
+            factory != null && factory.Catalog != null ? factory.Catalog.Selectable.Count : -1;
 
         void Update()
         {
@@ -990,7 +990,10 @@ namespace BlockMarbleRun.Build
 
         void CyclePart(int step)
         {
-            int count = factory.Catalog.parts.Count;
+            int count = factory.Catalog.Selectable.Count;
+            if (count == 0)
+                return;
+
             _partIndex = ((_partIndex + step) % count + count) % count;
             _variant = 0;
             FaceLastPlaced();
@@ -1130,11 +1133,14 @@ namespace BlockMarbleRun.Build
 
             // Cycling only makes sense against a joint. With an open mouth nearby, the alternatives
             // are this piece's own mouths meeting it; with none, there is nothing to choose between.
-            if (def.ports is { Length: > 1 } &&
-                PlacementSolver.NearestOpenMouth(_map, cursorCell.CellCentre, MouthSearchRange, out PlacedPart.WorldPort target))
+            if (PlacementSolver.NearestOpenMouth(_map, cursorCell.CellCentre, MouthSearchRange,
+                                                 out PlacedPart.WorldPort target))
             {
-                List<PlacedPart> matings = PlacementSolver.MatingsWith(_map, def, _colorIndex, target,
-                    allowBelowGround: true);
+                // A part with mouths meets the run mouth to mouth. One without - a funnel - is caught
+                // by its shelf instead, with the channel clutching down onto its studs.
+                List<PlacedPart> matings = def.ports is { Length: > 0 }
+                    ? PlacementSolver.MatingsWith(_map, def, _colorIndex, target, allowBelowGround: true)
+                    : PlacementSolver.StudMatingsWith(_map, def, _colorIndex, target);
 
                 if (matings.Count > 0)
                 {

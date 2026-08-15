@@ -71,7 +71,7 @@ namespace BlockMarbleRun.Play
                     return 0f;
 
                 float height = 7f * FastestSpeed * FastestSpeed / (20f * g);
-                return height / GridCoord.LayerUnits;
+                return height / GridCoord.BrickUnits;
             }
         }
 
@@ -458,7 +458,7 @@ namespace BlockMarbleRun.Play
 
             ContactRate = leader.ContactsPerSecond;
 
-            float dropped = (leader.PeakHeight - leader.transform.position.y) / GridCoord.LayerUnits;
+            float dropped = (leader.PeakHeight - leader.transform.position.y) / GridCoord.BrickUnits;
             EfficiencyPercent = dropped > 0.1f ? 100f * ClimbableLayers / dropped : 0f;
         }
 

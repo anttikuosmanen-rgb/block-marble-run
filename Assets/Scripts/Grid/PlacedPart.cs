@@ -58,6 +58,54 @@ namespace BlockMarbleRun.Grid
         public int TopLayer => Origin.layer + Mathf.Max(1, Definition.heightLayers);
 
         /// <summary>
+        /// The layer this part's surface reaches in one particular column, which is not always the
+        /// top of the part.
+        ///
+        /// A brick is the same height everywhere and the distinction never arose. A funnel is not: it
+        /// stands three layers tall at its rim while the shelf it offers the next piece is one layer
+        /// up, and asking the part for its height answers about the rim. Anything stacked on the
+        /// shelf was then judged to be floating two layers below where the part apparently ended, so
+        /// nothing could be built on it at all.
+        ///
+        /// Read from the per-layer masks, which already know: no new data, and it cannot disagree
+        /// with the occupancy the rest of the grid is using.
+        /// </summary>
+        public int TopLayerAt(int worldX, int worldY)
+        {
+            if (!LocalCell(worldX, worldY, out Vector2Int local))
+                return TopLayer;
+
+            int layers = Mathf.Max(1, Definition.heightLayers);
+
+            for (int layer = layers - 1; layer >= 0; layer--)
+                if (Definition.OccupiesCell(local.x, local.y, layer))
+                    return Origin.layer + layer + 1;
+
+            return Origin.layer;
+        }
+
+        /// <summary>The part's own cell under a world column, or false when the column is not its.</summary>
+        bool LocalCell(int worldX, int worldY, out Vector2Int local)
+        {
+            Vector2Int size = Definition.footprintSize;
+
+            for (int y = 0; y < size.y; y++)
+            for (int x = 0; x < size.x; x++)
+            {
+                Vector2Int r = RotateCell(new Vector2Int(x, y), size, Rotation);
+
+                if (Origin.x + r.x == worldX && Origin.y + r.y == worldY)
+                {
+                    local = new Vector2Int(x, y);
+                    return true;
+                }
+            }
+
+            local = default;
+            return false;
+        }
+
+        /// <summary>
         /// Maps a cell of the unrotated footprint to its position after rotation.
         ///
         /// Derived to match a Quaternion.Euler(0, 90*rot, 0) applied to the mesh, so the collision
@@ -109,20 +157,28 @@ namespace BlockMarbleRun.Grid
             if (studs == null || studs.Length == 0)
                 return false;
 
-            Vector2Int size = Definition.footprintSize;
+            if (!LocalCell(worldX, worldY, out Vector2Int local))
+                return false;
 
-            for (int y = 0; y < size.y; y++)
-            for (int x = 0; x < size.x; x++)
-            {
-                if (!studs[y * size.x + x])
-                    continue;
+            int index = local.y * Definition.footprintSize.x + local.x;
+            return index < studs.Length && studs[index];
+        }
 
-                Vector2Int r = RotateCell(new Vector2Int(x, y), size, Rotation);
-                if (Origin.x + r.x == worldX && Origin.y + r.y == worldY)
-                    return true;
-            }
+        /// <summary>
+        /// Whether the part's underside is flat against its base in this world column - that is,
+        /// whether there is anything there for a pillar to meet, or a stud to clutch into.
+        /// </summary>
+        public bool HasBottomSocketAt(int worldX, int worldY)
+        {
+            bool[] sockets = Definition.bottomSockets;
+            if (sockets == null || sockets.Length == 0)
+                return false;
 
-            return false;
+            if (!LocalCell(worldX, worldY, out Vector2Int local))
+                return false;
+
+            int index = local.y * Definition.footprintSize.x + local.x;
+            return index < sockets.Length && sockets[index];
         }
 
         /// <summary>

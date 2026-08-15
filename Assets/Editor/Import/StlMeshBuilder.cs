@@ -21,6 +21,7 @@ namespace BlockMarbleRun.EditorTools.Import
 
         public static Mesh Build(List<StlFacet> facets, float scale, float smoothingAngleDeg, string name)
         {
+            facets = RemoveStrayShells(facets, name);
             facets = MakeOrientationConsistent(facets);
 
             // Area-weighted, and deliberately un-normalised. Two reasons, both learned the hard way:
@@ -111,6 +112,139 @@ namespace BlockMarbleRun.EditorTools.Import
         /// flipped. This only makes the mesh self-consistent; which way "out" is remains the winding
         /// vote's decision.
         /// </summary>
+        /// <summary>
+        /// Drops loose fragments that are not part of the solid.
+        ///
+        /// A part is one closed surface. A file that contains a second, tiny, unconnected surface has
+        /// picked up a modelling accident - a stray plate left behind by a boolean, most often - and
+        /// it does real damage rather than just sitting there: a fragment overlapping the body shows
+        /// its own inward faces through the surface, and those are culled, so the part renders with
+        /// holes in it that are not holes in the geometry.
+        ///
+        /// Only fragments are dropped. A shell holding a hundredth of the facets or more is kept and
+        /// reported instead, because at that size it might be something deliberate and quietly
+        /// deleting a real piece of a part is far worse than drawing it wrongly.
+        /// </summary>
+        static List<StlFacet> RemoveStrayShells(List<StlFacet> facets, string name)
+        {
+            if (facets.Count < 8)
+                return facets;
+
+            var owner = new Dictionary<Vector3Int, int>(facets.Count * 3);
+            var parent = new List<int>();
+
+            int Find(int x)
+            {
+                while (parent[x] != x)
+                {
+                    parent[x] = parent[parent[x]];
+                    x = parent[x];
+                }
+
+                return x;
+            }
+
+            void Union(int a, int b)
+            {
+                int ra = Find(a), rb = Find(b);
+                if (ra != rb)
+                    parent[ra] = rb;
+            }
+
+            int Node(Vector3 v)
+            {
+                Vector3Int key = Quantise(v);
+
+                if (owner.TryGetValue(key, out int existing))
+                    return existing;
+
+                owner[key] = parent.Count;
+                parent.Add(parent.Count);
+
+                return parent.Count - 1;
+            }
+
+            var nodes = new int[facets.Count * 3];
+
+            for (int i = 0; i < facets.Count; i++)
+            {
+                StlFacet f = facets[i];
+
+                int a = Node(f.A), b = Node(f.B), c = Node(f.C);
+                nodes[i * 3] = a;
+                nodes[i * 3 + 1] = b;
+                nodes[i * 3 + 2] = c;
+
+                Union(a, b);
+                Union(b, c);
+            }
+
+            var sizes = new Dictionary<int, int>();
+            for (int i = 0; i < facets.Count; i++)
+            {
+                int root = Find(nodes[i * 3]);
+                sizes[root] = sizes.TryGetValue(root, out int n) ? n + 1 : 1;
+            }
+
+            if (sizes.Count < 2)
+                return facets;
+
+            int biggest = 0, keep = -1;
+            foreach (KeyValuePair<int, int> shell in sizes)
+                if (shell.Value > biggest)
+                {
+                    biggest = shell.Value;
+                    keep = shell.Key;
+                }
+
+            int threshold = Mathf.Max(4, facets.Count / 100);
+            var kept = new List<StlFacet>(facets.Count);
+            int dropped = 0;
+
+            var bounds = new Bounds();
+            bool haveBounds = false;
+
+            for (int i = 0; i < facets.Count; i++)
+            {
+                int root = Find(nodes[i * 3]);
+
+                if (root == keep || sizes[root] >= threshold)
+                {
+                    kept.Add(facets[i]);
+                    continue;
+                }
+
+                dropped++;
+
+                foreach (Vector3 v in new[] { facets[i].A, facets[i].B, facets[i].C })
+                {
+                    if (!haveBounds)
+                    {
+                        bounds = new Bounds(v, Vector3.zero);
+                        haveBounds = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(v);
+                    }
+                }
+            }
+
+            if (dropped == 0)
+            {
+                Debug.LogWarning($"[Stl] '{name}' contains {sizes.Count} separate surfaces. None is small " +
+                                 "enough to be treated as a stray, so all were kept - overlapping shells " +
+                                 "will render with holes where their inward faces show through.");
+                return facets;
+            }
+
+            Debug.LogWarning($"[Stl] '{name}': dropped {dropped} facet(s) in {sizes.Count - 1} loose " +
+                             $"fragment(s), around {bounds.center} spanning {bounds.size} mm. The model " +
+                             "has geometry that is not joined to the part.");
+
+            return kept;
+        }
+
         static List<StlFacet> MakeOrientationConsistent(List<StlFacet> facets)
         {
             var byEdge = new Dictionary<(Vector3Int, Vector3Int), List<int>>();

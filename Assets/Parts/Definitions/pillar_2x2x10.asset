@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da6a0d617f2b5439583cb3af12660b6f, type: 3}
+  m_Name: pillar_2x2x10
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartDefinition
+  id: pillar_2x2x10
+  displayName: Pillar 2X2x10
+  category: 0
+  mesh: {fileID: -8670151273213183110, guid: d1937d200a198469b83bfdacf81caa4f, type: 3}
+  colliderPrefab: {fileID: 0}
+  icon: {fileID: 2800000, guid: 76e6d974545704a2c9de5df67cc94c50, type: 3}
+  selectable: 1
+  footprintSize: {x: 2, y: 2}
+  footprintMask: 01010101
+  layerMasks: 0101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101
+  heightLayers: 20
+  pivotOffsetUnits: {x: 0.0004999962, y: 0.0004999962}
+  hasTunnel: 0
+  topStuds: 01010101
+  bottomSockets: 01010101
+  rotation: 0
+  ports: []
+  centerline: []
+  mirrorOf: 
+  mirrorVerdict: 1

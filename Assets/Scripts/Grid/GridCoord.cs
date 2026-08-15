@@ -15,7 +15,24 @@ namespace BlockMarbleRun.Grid
         public const float StudUnits = 0.16f;
 
         /// <summary>Brick layer height in world units: 19.2 mm.</summary>
-        public const float LayerUnits = 0.192f;
+        /// <summary>
+        /// One grid layer, in world units. Half a brick.
+        ///
+        /// The grid used to step a whole brick at a time, which left nowhere for a plate to sit - and
+        /// plates are not a special case, they are what half the interesting parts are made of: the
+        /// funnel's shelf, anything that has to meet a channel halfway. Halving the step costs an
+        /// integer per part and buys the whole half-height family.
+        /// </summary>
+        public const float LayerUnits = 0.096f;
+
+        /// <summary>
+        /// One brick, in world units. Two grid layers.
+        ///
+        /// For anything a person counts in bricks rather than in grid steps - how far a ball could
+        /// climb, how deep the water is. Those numbers were tuned against bricks and should not
+        /// silently double because the grid underneath them got finer.
+        /// </summary>
+        public const float BrickUnits = 0.192f;
 
         public int x;
         public int y;

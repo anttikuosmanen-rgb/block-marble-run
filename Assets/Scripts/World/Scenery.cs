@@ -67,8 +67,8 @@ namespace BlockMarbleRun.World
         /// <summary>Water level expressed in brick layers, which is how a builder thinks about it.</summary>
         public float WaterLayers
         {
-            get => waterLevel / Grid.GridCoord.LayerUnits;
-            set => waterLevel = Mathf.Max(0f, value) * Grid.GridCoord.LayerUnits;
+            get => waterLevel / Grid.GridCoord.BrickUnits;
+            set => waterLevel = Mathf.Max(0f, value) * Grid.GridCoord.BrickUnits;
         }
 
         public Camera targetCamera;

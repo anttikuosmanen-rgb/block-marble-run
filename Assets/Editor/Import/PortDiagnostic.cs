@@ -56,7 +56,7 @@ namespace BlockMarbleRun.EditorTools.Import
                     sb.AppendLine($"   port {p.facing,-5} midline[{p.midlineHalfStuds.x},{p.midlineHalfStuds.y}] " +
                                   $"= centre {centreStuds:0.#} studs on edge {edgeStuds:0.#}  " +
                                   $"width {p.widthStuds}  height {p.heightMm:0.#}mm " +
-                                  $"(layer {Mathf.FloorToInt(p.heightMm / PartAnalysis.LayerHeightMm)})");
+                                  $"(layer {Mathf.FloorToInt(p.heightMm / PartAnalysis.BrickPitchMm)})");
                 }
 
                 sb.AppendLine();

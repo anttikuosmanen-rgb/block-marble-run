@@ -124,8 +124,8 @@ namespace BlockMarbleRun.Play
                     lowest = y;
 
                     float g = Mathf.Abs(Physics.gravity.y);
-                    float climb = g > 0f ? 7f * speed * speed / (20f * g) / GridCoord.LayerUnits : 0f;
-                    float dropped = (marble.PeakHeight - y) / GridCoord.LayerUnits;
+                    float climb = g > 0f ? 7f * speed * speed / (20f * g) / GridCoord.BrickUnits : 0f;
+                    float dropped = (marble.PeakHeight - y) / GridCoord.BrickUnits;
 
                     result.ClimbAtLowest = climb;
                     result.EnergyKept = dropped > 0.1f ? 100f * climb / dropped : 0f;

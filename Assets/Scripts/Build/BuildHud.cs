@@ -98,10 +98,10 @@ namespace BlockMarbleRun.Build
             const float width = 380f;
             GUILayout.BeginArea(new Rect((UiScale.Width - width) * 0.5f, UiScale.Height - 62f, width, 54f));
 
-            GUILayout.Label($"Water level {scenery.WaterLayers:0.0} layers   ({scenery.waterLevel:0.000} units)",
+            GUILayout.Label($"Water level {scenery.WaterLayers:0.0} bricks   ({scenery.waterLevel:0.000} units)",
                             _style);
 
-            float layers = GUILayout.HorizontalSlider(scenery.WaterLayers, 0f, 20f);
+            float layers = GUILayout.HorizontalSlider(scenery.WaterLayers, 0f, 20f);   // bricks, not grid layers
 
             if (!Mathf.Approximately(layers, scenery.WaterLayers))
                 scenery.WaterLayers = layers;

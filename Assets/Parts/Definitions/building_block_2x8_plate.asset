@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da6a0d617f2b5439583cb3af12660b6f, type: 3}
+  m_Name: building_block_2x8_plate
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartDefinition
+  id: building_block_2x8_plate
+  displayName: Building Block 2X8 plate
+  category: 0
+  mesh: {fileID: 4300000, guid: 51bc276f68ccb41d08fed617fe30d84e, type: 2}
+  colliderPrefab: {fileID: 0}
+  icon: {fileID: 2800000, guid: d6ce2ab5d9a724527b4d25847df8ae58, type: 3}
+  selectable: 0
+  footprintSize: {x: 2, y: 8}
+  footprintMask: 01010101010101010101010101010101
+  layerMasks: 
+  heightLayers: 1
+  pivotOffsetUnits: {x: 0.000000003799796, y: -0.00000001527369}
+  hasTunnel: 0
+  topStuds: 01010101010101010101010101010101
+  bottomSockets: 01010101010101010101010101010101
+  rotation: 0
+  ports: []
+  centerline: []
+  mirrorOf: 
+  mirrorVerdict: 1

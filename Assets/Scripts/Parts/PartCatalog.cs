@@ -20,8 +20,35 @@ namespace BlockMarbleRun.Parts
             new Color(0.30f, 0.32f, 0.36f),
         };
 
+        List<PartDefinition> _selectable;
+
+        /// <summary>
+        /// The parts the palette offers, in catalog order.
+        ///
+        /// Everything else still lives in <see cref="parts"/>, which is what a save file and the
+        /// scaffolder look through: a part that cannot be picked can still be built by the game and
+        /// must still load by name.
+        /// </summary>
+        public List<PartDefinition> Selectable
+        {
+            get
+            {
+                if (_selectable != null)
+                    return _selectable;
+
+                _selectable = new List<PartDefinition>(parts.Count);
+
+                foreach (PartDefinition def in parts)
+                    if (def != null && def.selectable)
+                        _selectable.Add(def);
+
+                return _selectable;
+            }
+        }
+
+        /// <summary>Indexes the offered parts, which is what the palette and Q/E step through.</summary>
         public PartDefinition Get(int index) =>
-            parts.Count == 0 ? null : parts[Mathf.Clamp(index, 0, parts.Count - 1)];
+            Selectable.Count == 0 ? null : Selectable[Mathf.Clamp(index, 0, Selectable.Count - 1)];
 
         public Color ColorAt(int index) =>
             palette.Length == 0 ? Color.white : palette[((index % palette.Length) + palette.Length) % palette.Length];

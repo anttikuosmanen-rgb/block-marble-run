@@ -31,7 +31,7 @@ namespace BlockMarbleRun.Persistence
     public class SaveModel
     {
         /// <summary>Bump whenever the stored shape changes, and add a matching step in <see cref="SaveMigrations"/>.</summary>
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
 
         public int version = CurrentVersion;
         public string name = "Untitled";
@@ -82,15 +82,28 @@ namespace BlockMarbleRun.Persistence
                 return model;
             }
 
-            // No steps needed so far, and both additions to date explain why. The role field was
-            // added without a bump at all: JsonUtility leaves an absent field at its default, and "no
-            // role" is exactly what an older save means. The floor and water level took a bump to v2
-            // because they are worth telling apart in a file - but they still read correctly without
-            // a step, since a v1 save was made on the grid and the grid is what the default says.
+            // The first real step, and the reason the chain was built before it was needed.
+            //
+            // Up to v2 the grid stepped a whole brick; from v3 it steps a half, so plates have
+            // somewhere to stand. Every stored layer index therefore means half of what it used to,
+            // and a creation saved before the change would load at half its height with its channels
+            // meeting nothing. Doubling is the whole migration - the grid got finer, not different.
+            if (model.version < 3)
+            {
+                for (int i = 0; i < model.parts.Length; i++)
+                    model.parts[i].layer *= 2;
+
+                model.boundsMin = new Vector3Int(model.boundsMin.x, model.boundsMin.y * 2, model.boundsMin.z);
+                model.boundsMax = new Vector3Int(model.boundsMax.x, model.boundsMax.y * 2, model.boundsMax.z);
+            }
+
+            // Earlier additions needed no step, and both explain why. The role field was added
+            // without a bump at all: JsonUtility leaves an absent field at its default, and "no role"
+            // is exactly what an older save means. The floor and water level took a bump to v2
+            // because they are worth telling apart in a file, but they still read correctly without a
+            // step, since a v1 save was made on the grid and the grid is what the default says.
             //
             // A step is for a change that cannot be read correctly without one.
-
-            // while (model.version < SaveModel.CurrentVersion) { ... step by step ... }
 
             model.version = SaveModel.CurrentVersion;
             return model;

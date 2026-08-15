@@ -14,11 +14,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartCatalog
   parts:
   - {fileID: 11400000, guid: 598baa51206754ccfa864f8fcb88ef75, type: 2}
+  - {fileID: 11400000, guid: 6c0d3e41e8fe740528c77030f2adfcad, type: 2}
   - {fileID: 11400000, guid: 0a17bad76a8dd4388ad064935dd971ed, type: 2}
+  - {fileID: 11400000, guid: 40da27a99c572466d8f53857f4e8989e, type: 2}
   - {fileID: 11400000, guid: 88780bee92ab54a758de1fee9caf7af4, type: 2}
+  - {fileID: 11400000, guid: 7a5cb0fa000d54e69a1ce06f3186309a, type: 2}
   - {fileID: 11400000, guid: 782ed5062c4314638a981d6fb320b50b, type: 2}
+  - {fileID: 11400000, guid: d20c3082ef676465e80a2a4981547917, type: 2}
   - {fileID: 11400000, guid: cf0a2878f4a574395a29c193f395d3a7, type: 2}
+  - {fileID: 11400000, guid: 8d6f31cbb3493433f8a6686aa28c1222, type: 2}
   - {fileID: 11400000, guid: 044ee55ec5c0b4a04b8b294b2f8d0d74, type: 2}
+  - {fileID: 11400000, guid: 0743a141d14e94371b83d73a745505a8, type: 2}
+  - {fileID: 11400000, guid: 3de18f345c56247218761e610e9f16a8, type: 2}
+  - {fileID: 11400000, guid: 11aedeb8ce0bc4ba78f5ad28ce2ad946, type: 2}
   - {fileID: 11400000, guid: c0a8c4ce1f89c40c6abd1bffab058cf0, type: 2}
   - {fileID: 11400000, guid: 941f4d64ca653405f9997deda036e5c7, type: 2}
   - {fileID: 11400000, guid: 98a6e47f3bf864f15a8f25da72cb5d4b, type: 2}
@@ -26,6 +34,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 48f56b47ba2a744518bc37911fcbfd8c, type: 2}
   - {fileID: 11400000, guid: ee668b62276c74bd2879e27cef779022, type: 2}
   - {fileID: 11400000, guid: 5fc0a95b09b614500a930c42fd826ee8, type: 2}
+  - {fileID: 11400000, guid: 80b855d502bf44fa7b18a5a7c050e8df, type: 2}
+  - {fileID: 11400000, guid: 415ec96453fb24d83a99d7ee034d7ebf, type: 2}
   - {fileID: 11400000, guid: 4381b818324a24d3894715ebfe619872, type: 2}
   - {fileID: 11400000, guid: 67c8269faa0464c63964a08e3c97e7ce, type: 2}
   - {fileID: 11400000, guid: 1155244646e964a5ba328ec1220174d4, type: 2}

@@ -34,7 +34,58 @@ namespace BlockMarbleRun.Parts
 
         public PartCatalog Catalog => catalog;
 
-        void Awake() => BuildPaletteMaterials();
+        void Awake()
+        {
+            BuildPaletteMaterials();
+            BuildPillarFactory();
+            FindScaffoldPlate();
+        }
+
+        [Tooltip("Modelled pillar that support columns of any height are cut from.")]
+        public string pillarSourceId = "pillar_2x2x7";
+
+        [Tooltip("Half-height brick, for the odd layer a whole brick cannot fill.")]
+        public string plateId = "building_block_2x2_plate";
+
+        /// <summary>
+        /// Sets up the procedural pillars from whichever modelled pillar is in the catalog.
+        ///
+        /// Nothing fails if it is missing: the scaffolder falls back to bricks, which is what it did
+        /// before there were pillars at all.
+        /// </summary>
+        void BuildPillarFactory()
+        {
+            if (catalog == null)
+                return;
+
+            foreach (PartDefinition def in catalog.parts)
+            {
+                if (def == null || def.id != pillarSourceId)
+                    continue;
+
+                ProceduralPillars.Active = new ProceduralPillars(def);
+                return;
+            }
+
+            Debug.LogWarning($"[Pillars] No part named '{pillarSourceId}' in the catalog; support " +
+                             "columns will be built from bricks.");
+        }
+
+        void FindScaffoldPlate()
+        {
+            if (catalog == null)
+                return;
+
+            foreach (PartDefinition def in catalog.parts)
+                if (def != null && def.id == plateId)
+                {
+                    Grid.ScaffoldBuilder.Plate = def;
+                    return;
+                }
+
+            Debug.LogWarning($"[Parts] No part named '{plateId}' in the catalog; support columns " +
+                             "cannot fill an odd last layer.");
+        }
 
         void BuildPaletteMaterials()
         {

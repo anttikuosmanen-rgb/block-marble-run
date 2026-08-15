@@ -95,7 +95,13 @@ namespace BlockMarbleRun.Persistence
 
             foreach (SavedPart saved in model.parts)
             {
+                // Generated pillars are not in the catalog - they are made on demand and named for
+                // their height - so an id the catalog does not know is offered to the pillar factory
+                // before being counted as a part this build no longer has.
                 if (!byId.TryGetValue(saved.id, out PartDefinition def))
+                    def = ProceduralPillars.Resolve(saved.id);
+
+                if (def == null)
                 {
                     report.UnknownParts.Add(saved.id);
                     continue;

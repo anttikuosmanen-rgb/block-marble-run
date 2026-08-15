@@ -42,7 +42,7 @@ namespace BlockMarbleRun.EditorTools.Import
             System.Array.Sort(paths);
 
             var log = new StringBuilder();
-            int created = 0, updated = 0, mirrors = 0, needsReview = 0;
+            int created = 0, updated = 0, mirrors = 0, plates = 0, needsReview = 0;
 
             foreach (string stlPath in paths)
             {
@@ -58,6 +58,12 @@ namespace BlockMarbleRun.EditorTools.Import
                 EnsureReadableIfChannel(stlPath, analysis);
                 def.mesh = AssetDatabase.LoadAssetAtPath<Mesh>(stlPath);
                 EditorUtility.SetDirty(def);
+
+                // Bricks get a half-height twin. The grid steps half a brick, so a column one layer
+                // short of its load has nothing else that fits, and a part meeting a channel halfway
+                // needs somewhere to stand.
+                if (name.StartsWith("building_block") && GeneratePlate(stlPath, name, def))
+                    plates++;
 
                 if (def.mirrorVerdict == MirrorVerdict.Chiral)
                 {
@@ -83,8 +89,8 @@ namespace BlockMarbleRun.EditorTools.Import
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log($"[Parts] {created} created, {updated} refreshed, {mirrors} mirrors generated, " +
-                      $"{needsReview} awaiting review.\n{log}");
+            Debug.Log($"[Parts] {created} created, {updated} refreshed, {mirrors} mirrors and " +
+                      $"{plates} plates generated, {needsReview} awaiting review.\n{log}");
         }
 
         /// <summary>
@@ -100,7 +106,10 @@ namespace BlockMarbleRun.EditorTools.Import
             if (AssetImporter.GetAtPath(stlPath) is not StlScriptedImporter importer)
                 return;
 
-            bool wanted = analysis.Ports.Count > 0 || analysis.HasTunnel;
+            // Pillars too: their mesh is the template a support column of any height is cut from, so
+            // it has to be readable at runtime even though nothing collides against the original.
+            bool wanted = analysis.Ports.Count > 0 || analysis.HasTunnel ||
+                          System.IO.Path.GetFileNameWithoutExtension(stlPath).StartsWith("pillar");
             if (importer.readable == wanted)
                 return;
 
@@ -148,14 +157,97 @@ namespace BlockMarbleRun.EditorTools.Import
             // and hand-entered coordinates would drift from the mesh the first time a part changes.
             def.ports = analysis.Ports.ToArray();
 
-            if (def.bottomSockets == null || def.bottomSockets.Length != analysis.FootprintMask.Length)
-                def.bottomSockets = (bool[])analysis.FootprintMask.Clone();
+            // Derived from the underside, not copied from the footprint. The copy claimed a socket
+            // under every cell a part covered, which is true of a brick and false of half of anything
+            // with a channel: a slide's underside is the back of its own groove and a tunnel's is its
+            // roof, and a support pillar built up into either blocks the thing it is there to carry.
+            def.bottomSockets = analysis.BottomSockets;
 
             if (def.mirrorVerdict == MirrorVerdict.Unreviewed)
                 def.mirrorVerdict = analysis.MirrorVerdict;
 
             foreach (string warning in analysis.Warnings)
                 Debug.LogWarning($"[Parts] {name}: {warning}", def);
+        }
+
+        /// <summary>
+        /// Writes the half-height twin of a brick, mesh and definition together.
+        ///
+        /// Everything except the height is the brick's own: the same footprint, the same studs and
+        /// the same sockets, because a plate is a brick with less wall between them.
+        /// </summary>
+        static bool GeneratePlate(string stlPath, string sourceName, PartDefinition source)
+        {
+            string plateName = $"{sourceName}_plate";
+            string meshPath = $"{GeneratedFolder}/{plateName}.asset";
+
+            var importer = AssetImporter.GetAtPath(stlPath) as StlScriptedImporter;
+            float scale = importer != null ? importer.scale : 0.01f;
+            float smoothing = importer != null ? importer.smoothingAngle : 30f;
+
+            Mesh mesh = PlateBuilder.BuildMesh(stlPath, scale, smoothing, plateName);
+
+            if (mesh == null)
+            {
+                Debug.LogWarning($"[Parts] '{sourceName}' has no plain wall to shorten; no plate made.");
+                return false;
+            }
+
+            var existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+            if (existing != null)
+            {
+                existing.Clear();
+                existing.indexFormat = mesh.indexFormat;
+                existing.SetVertices(mesh.vertices);
+                existing.SetNormals(mesh.normals);
+                existing.SetTriangles(mesh.triangles, 0);
+                existing.RecalculateBounds();
+                mesh = existing;
+                EditorUtility.SetDirty(existing);
+            }
+            else
+            {
+                AssetDatabase.CreateAsset(mesh, meshPath);
+            }
+
+            string defPath = $"{DefinitionFolder}/{plateName}.asset";
+            var def = AssetDatabase.LoadAssetAtPath<PartDefinition>(defPath);
+
+            if (def == null)
+            {
+                def = ScriptableObject.CreateInstance<PartDefinition>();
+                AssetDatabase.CreateAsset(def, defPath);
+            }
+
+            def.id = plateName;
+            def.displayName = $"{source.displayName} plate";
+            def.category = source.category;
+            def.mesh = mesh;
+
+            def.footprintSize = source.footprintSize;
+            def.footprintMask = source.footprintMask;
+            def.topStuds = source.topStuds;
+            def.bottomSockets = source.bottomSockets;
+            def.pivotOffsetUnits = source.pivotOffsetUnits;
+            def.rotation = source.rotation;
+            def.hasTunnel = source.hasTunnel;
+            def.ports = source.ports;
+            def.centerline = source.centerline;
+            // A plate is as handed as the brick it came from, which is to say not at all - and
+            // marking it Redundant keeps the generator from ever making a mirror of one.
+            def.mirrorVerdict = MirrorVerdict.Redundant;
+
+            // Half of the brick, and solid, so the default full-prism occupancy is the truth.
+            def.heightLayers = Mathf.Max(1, source.heightLayers / 2);
+            def.layerMasks = null;
+
+            // Only the 2x2 goes on the bar. The others are built by the scaffolder and named in save
+            // files, so they have to exist - they just do not each need a slot on a palette that has
+            // to fit on screen.
+            def.selectable = source.footprintSize is { x: 2, y: 2 };
+
+            EditorUtility.SetDirty(def);
+            return true;
         }
 
         static void GenerateMirror(string stlPath, string sourceName, PartDefinition source, PartAnalysis analysis)
@@ -206,6 +298,12 @@ namespace BlockMarbleRun.EditorTools.Import
             def.footprintSize = source.footprintSize;
             def.rotation = source.rotation;
 
+            // Not handed, and easy to leave out - which is how three mirrored parts ended up with a
+            // solid box where their tunnel should be. hasTunnel is what routes a part to its own
+            // geometry; without it the factory falls through to the generated brick collider, and a
+            // funnel's bowl or a slide's underpass is filled in solid.
+            def.hasTunnel = source.hasTunnel;
+
             def.footprintMask = MirrorBuilder.MirrorMask(source.footprintMask, source.footprintSize);
             def.layerMasks = MirrorBuilder.MirrorLayerMasks(source.layerMasks, source.footprintSize,
                                                             Mathf.Max(1, source.heightLayers));
@@ -238,7 +336,8 @@ namespace BlockMarbleRun.EditorTools.Import
 
         static PartCategory GuessCategory(string name)
         {
-            if (name.StartsWith("building_block")) return PartCategory.Block;
+            if (name.StartsWith("building_block") || name.StartsWith("pillar")) return PartCategory.Block;
+            if (name.StartsWith("funnel")) return PartCategory.Slide;
             if (name.StartsWith("bridge")) return PartCategory.Bridge;
             if (name.StartsWith("crossing")) return PartCategory.Crossing;
             if (name.StartsWith("terminal")) return PartCategory.Terminal;

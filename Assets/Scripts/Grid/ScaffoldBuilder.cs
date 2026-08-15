@@ -29,14 +29,14 @@ namespace BlockMarbleRun.Grid
 
             // Only channel parts prop themselves up. A brick is the player's own structure and may
             // cantilever as far as they like; a run of track is meant to look carried.
-            if (pillar == null || !part.HasPorts)
+            if (pillar == null || !NeedsCarrying(part))
             {
                 // Said out loud rather than returning quietly. The first curve placed reported
                 // nothing at all, which read as the log being broken.
                 if (Verbose)
                     Report = $"{part.Definition.id} at layer {part.Origin.layer}: " +
                              (pillar == null ? "no pillar part"
-                                             : "not a channel piece - bricks may cantilever");
+                                             : "a brick - the player's own structure may cantilever");
 
                 return supports;
             }
@@ -64,7 +64,6 @@ namespace BlockMarbleRun.Grid
                 // itself - every anchor reported "rests already" and a run raised off the ground kept
                 // no supports at all.
                 int from = HighestObstructionBelow(map, pillar, anchor, topLayer);
-                int built = 0;
 
                 // Asked per column, not once for the whole part. A slide joined to an elevated run is
                 // "supported" by that joint, yet its far end still hangs over nothing four studs away
@@ -77,33 +76,39 @@ namespace BlockMarbleRun.Grid
                     continue;
                 }
 
-                for (int layer = from; layer < topLayer; layer++)
+                // One pillar for the whole column where the height allows it. Ten stacked bricks and
+                // one ten-layer pillar hold the same weight, but the pillar is a single part, a
+                // single collider and a single line in the save file - and has no seams down it for
+                // a marble that wanders off the track to catch on.
+                PartDefinition tall = ProceduralPillars.Active?.ForLayers(topLayer - from);
+
+                if (tall != null)
                 {
-                    var brick = new PlacedPart(pillar, new GridCoord(anchor.x, anchor.y, layer), 0, ScaffoldColour);
+                    var column = new PlacedPart(tall, new GridCoord(anchor.x, anchor.y, from), 0, ScaffoldColour);
 
-                    // Stop this pillar at the first obstruction rather than abandoning it: the part of
-                    // the column that fits is still load bearing.
-                    // Named separately so the report can say which of the two stopped the column: a
-                    // clash with the part itself and a clash with the existing build look identical
-                    // from the outside and mean quite different things.
-                    bool inPart = Intersects(brick, partCells);
-
-                    if (inPart || map.CanPlace(brick) == PlacementResult.Blocked)
+                    if (!Intersects(column, partCells) && map.CanPlace(column) != PlacementResult.Blocked)
                     {
+                        map.Add(column);
+                        supports.Add(column);
+
                         if (Verbose)
-                            Report += $" - stopped at {layer} by {(inPart ? "the part" : "the build")}";
+                            Report = Report.TrimEnd() +
+                                     $"\n  ({anchor.x},{anchor.y}) {why}: top {topLayer} from {from} - " +
+                                     $"1 pillar of {topLayer - from}";
 
-                        break;
+                        continue;
                     }
-
-                    map.Add(brick);
-                    supports.Add(brick);
-                    built++;
                 }
+
+                // Bricks otherwise, and a plate for an odd last layer. A pillar only helps where its
+                // whole height fits and nothing is in the way.
+                int built = FillColumn(map, anchor, from, topLayer, pillar, partCells, supports,
+                                       out string stoppedBy);
 
                 if (Verbose)
                     Report = Report.TrimEnd() +
-                             $"\n  ({anchor.x},{anchor.y}) {why}: top {topLayer} from {from} - {built} brick(s)";
+                             $"\n  ({anchor.x},{anchor.y}) {why}: top {topLayer} from {from} - {built} piece(s)" +
+                             (stoppedBy == null ? "" : $" - {stoppedBy}");
             }
 
             return supports;
@@ -155,25 +160,87 @@ namespace BlockMarbleRun.Grid
                     var anchor = new Vector2Int(part.Origin.x + dx, part.Origin.y + dy);
                     int from = HighestObstructionBelow(map, pillar, anchor, part.Origin.layer);
 
-                    for (int layer = from; layer < part.Origin.layer; layer++)
-                    {
-                        var brick = new PlacedPart(pillar, new GridCoord(anchor.x, anchor.y, layer),
-                            0, ScaffoldColour);
-
-                        if (map.CanPlace(brick) == PlacementResult.Blocked)
-                            break;
-
-                        map.Add(brick);
-                        added.Add(brick);
-                    }
+                    FillColumn(map, anchor, from, part.Origin.layer, pillar, Empty, added, out _);
                 }
             }
 
             return added;
         }
 
+        /// <summary>
+        /// Whether the game props this part up, or leaves it to the player.
+        ///
+        /// Bricks and plates are the player's own structure and may cantilever as far as they like.
+        /// Everything else is track in the broad sense - a run, a funnel - and is meant to look
+        /// carried. Testing for channel mouths was the old rule and left the funnel unsupported: it
+        /// has no mouths of its own, only a shelf that a channel clutches onto.
+        /// </summary>
+        static bool NeedsCarrying(PlacedPart part) =>
+            part.HasPorts || part.Definition.category != PartCategory.Block;
+
         /// <summary>Grey, so scaffolding reads as structure rather than as part of the design.</summary>
         public const byte ScaffoldColour = 5;
+
+        /// <summary>
+        /// Half-height brick, for the odd layer a whole one cannot fill.
+        ///
+        /// The grid steps half a brick, so a column can need an odd number of layers - and until
+        /// there was a plate, the filler simply stopped one short and left the run it was carrying
+        /// resting on nothing.
+        /// </summary>
+        public static PartDefinition Plate;
+
+        /// <summary>No cells to avoid. A lifted column has no part of its own to clash with.</summary>
+        static readonly HashSet<GridCoord> Empty = new();
+
+        /// <summary>
+        /// Fills a column between two layers, using the tallest piece that fits at each step.
+        ///
+        /// Stepping by the piece's own height rather than one layer at a time is what makes this
+        /// work at all now that a brick is two layers: advancing by one put the next brick halfway
+        /// inside the last, which the map refused, and the column stopped at its first brick.
+        /// </summary>
+        static int FillColumn(GridMap map, Vector2Int anchor, int from, int topLayer,
+                              PartDefinition brick, HashSet<GridCoord> partCells,
+                              List<PlacedPart> supports, out string stoppedBy)
+        {
+            stoppedBy = null;
+            int layer = from;
+            int built = 0;
+
+            while (layer < topLayer)
+            {
+                int remaining = topLayer - layer;
+
+                PartDefinition piece =
+                    brick != null && brick.heightLayers <= remaining ? brick :
+                    Plate != null && Plate.heightLayers <= remaining ? Plate : null;
+
+                if (piece == null)
+                {
+                    stoppedBy = $"nothing fits the last {remaining} layer(s)";
+                    break;
+                }
+
+                var support = new PlacedPart(piece, new GridCoord(anchor.x, anchor.y, layer), 0, ScaffoldColour);
+
+                bool inPart = Intersects(support, partCells);
+
+                if (inPart || map.CanPlace(support) == PlacementResult.Blocked)
+                {
+                    stoppedBy = $"stopped at {layer} by {(inPart ? "the part" : "the build")}";
+                    break;
+                }
+
+                map.Add(support);
+                supports.Add(support);
+
+                built++;
+                layer += Mathf.Max(1, piece.heightLayers);
+            }
+
+            return built;
+        }
 
         static bool Intersects(PlacedPart brick, HashSet<GridCoord> cells)
         {
@@ -206,7 +273,20 @@ namespace BlockMarbleRun.Grid
             PlacedPart part, PartDefinition pillar)
         {
             var seen = new HashSet<Vector2Int>();
+            var chosen = new List<(Vector2Int anchor, int topLayer, string why)>();
             int mouths = 0;
+
+            // A part with no mouths is carried where it carries something. For the funnel that is its
+            // shelf, which is both the loaded corner and the only part of it with solid ground
+            // underneath - the middle is a hole, and a pillar there would stand in the way of the
+            // very balls the hole is for.
+            if (!part.HasPorts)
+            {
+                foreach ((Vector2Int anchor, int topLayer, string why) in StuddedAnchors(part, pillar))
+                    yield return (anchor, topLayer, why);
+
+                yield break;
+            }
 
             foreach (PlacedPart.WorldPort port in part.WorldPorts())
             {
@@ -231,7 +311,7 @@ namespace BlockMarbleRun.Grid
                 int mouthUnderside = UndersideLayer(part, anchor, pillar, port.FloorLayer);
 
                 if (seen.Add(anchor))
-                    yield return (anchor, mouthUnderside, $"mouth {port.Facing}");
+                    chosen.Add((anchor, mouthUnderside, $"mouth {port.Facing}"));
 
                 // A raised mouth may hang past whatever carries the low end, and the straddling pillar
                 // only holds its lip. This one holds the overhang just inside it.
@@ -271,7 +351,7 @@ namespace BlockMarbleRun.Grid
                     continue;
 
                 if (seen.Add(deeper))
-                    yield return (deeper, deeperUnderside, $"inside raised {port.Facing}");
+                    chosen.Add((deeper, deeperUnderside, $"inside raised {port.Facing}"));
             }
 
             Vector2Int size = part.RotatedSize;
@@ -286,16 +366,195 @@ namespace BlockMarbleRun.Grid
                     part.Origin.y + Mathf.Max(0, size.y - step.y));
 
                 if (seen.Add(farCorner))
-                    yield return (farCorner, part.Origin.layer, "dead end");
+                    chosen.Add((farCorner, part.Origin.layer, "dead end"));
+
+                foreach (var a in chosen)
+                    yield return a;
 
                 yield break;
             }
+
+            // A piece with a way through it stands on its own flat underside when it has one, and
+            // then only there: a pillar at the mouth of a u-turn slide sits right under the channel
+            // opening, and two of them plus the middle is three supports where one carries it.
+            //
+            // Only when it has one, though. A slide curve has a tunnel too, and no patch of flat
+            // underside big enough to stand a pillar under - its raised end is carried at the mouth
+            // or not at all, and not at all was the bug reported three times before this.
+            if (part.Definition.hasTunnel)
+            {
+                var flat = new List<(Vector2Int anchor, int topLayer, string why)>(SocketAnchors(part, pillar));
+
+                if (flat.Count > 0)
+                {
+                    // One pillar, in the middle of the flat part. A piece that stands on its own
+                    // underside is carried by a single column under the centre of it - lining the
+                    // whole edge with them props nothing extra and buries the piece.
+                    yield return Central(part, flat);
+                    yield break;
+                }
+            }
+
+            foreach (var a in chosen)
+                yield return a;
 
             // Mid-span propping was tried and removed. A curve fills a diagonal band of its square,
             // so anchors chosen from the bounding box land beside the arc rather than under it, and a
             // brick standing next to the piece it is meant to carry is worse than no brick at all.
             // Doing this properly means following the channel path, which is work the centreline
             // derivation would make straightforward and guesswork without it.
+        }
+
+        /// <summary>
+        /// Whether every cell of a pillar-sized patch that lies under the part has a flat underside.
+        ///
+        /// Cells outside the part do not count - a pillar at a mouth deliberately projects past the
+        /// piece. What matters is that the half beneath it meets something solid: build under a
+        /// tunnel and the pillar fills the passage, build under a slide and it meets the back of the
+        /// channel at whatever height that happens to be.
+        /// </summary>
+        /// <summary>Whether the part stands over this world column at all.</summary>
+        static bool Covers(PlacedPart part, int worldX, int worldY)
+        {
+            foreach (GridCoord cell in part.OccupiedCells())
+                if (cell.x == worldX && cell.y == worldY)
+                    return true;
+
+            return false;
+        }
+
+        static bool Solid(PlacedPart part, Vector2Int anchor, PartDefinition pillar)
+        {
+            bool anyUnder = false;
+
+            for (int x = 0; x < pillar.footprintSize.x; x++)
+            for (int y = 0; y < pillar.footprintSize.y; y++)
+            {
+                int wx = anchor.x + x, wy = anchor.y + y;
+
+                if (!Covers(part, wx, wy))
+                    continue;
+
+                anyUnder = true;
+
+                if (!part.HasBottomSocketAt(wx, wy))
+                    return false;
+            }
+
+            return anyUnder;
+        }
+
+        /// <summary>
+        /// The anchor nearest the middle of the part's flat-bottomed region.
+        ///
+        /// Measured against the centre of the sockets themselves rather than of the whole footprint:
+        /// on a u-turn slide the flat half is one edge, and the middle of the piece is out over the
+        /// tunnel where no pillar may go.
+        /// </summary>
+        static (Vector2Int anchor, int topLayer, string why) Central(
+            PlacedPart part, List<(Vector2Int anchor, int topLayer, string why)> anchors)
+        {
+            float sumX = 0f, sumY = 0f;
+            int counted = 0;
+
+            foreach (GridCoord cell in part.OccupiedCells())
+            {
+                if (!part.HasBottomSocketAt(cell.x, cell.y))
+                    continue;
+
+                sumX += cell.x;
+                sumY += cell.y;
+                counted++;
+            }
+
+            if (counted == 0)
+                return anchors[0];
+
+            var centre = new Vector2(sumX / counted, sumY / counted);
+
+            var best = anchors[0];
+            float nearest = float.MaxValue;
+
+            foreach (var candidate in anchors)
+            {
+                // Measured from the pillar's own middle, not its corner.
+                var middle = new Vector2(candidate.anchor.x + 0.5f, candidate.anchor.y + 0.5f);
+                float distance = (middle - centre).sqrMagnitude;
+
+                if (distance < nearest)
+                {
+                    nearest = distance;
+                    best = candidate;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>Pillar-sized patches under the flat-bottomed part of a piece, working outward.</summary>
+        static IEnumerable<(Vector2Int anchor, int topLayer, string why)> SocketAnchors(
+            PlacedPart part, PartDefinition pillar)
+        {
+            var seen = new HashSet<Vector2Int>();
+            Vector2Int size = part.RotatedSize;
+            Vector2Int step = pillar.footprintSize;
+
+            for (int dx = 0; dx < size.x; dx += step.x)
+            for (int dy = 0; dy < size.y; dy += step.y)
+            {
+                var anchor = new Vector2Int(part.Origin.x + dx, part.Origin.y + dy);
+
+                if (!Solid(part, anchor, pillar) || !seen.Add(anchor))
+                    continue;
+
+                yield return (anchor, UndersideLayer(part, anchor, pillar, part.Origin.layer), "flat underside");
+            }
+        }
+
+        /// <summary>
+        /// Pillar-sized patches under the cells a part offers studs on.
+        ///
+        /// Studs are where the next piece goes, so they are where the weight is - and on a part built
+        /// around a hole they are also the only place with anything solid to stand a pillar under.
+        /// </summary>
+        static IEnumerable<(Vector2Int anchor, int topLayer, string why)> StuddedAnchors(
+            PlacedPart part, PartDefinition pillar)
+        {
+            var seen = new HashSet<Vector2Int>();
+            Vector2Int size = part.RotatedSize;
+            Vector2Int step = pillar.footprintSize;
+
+            for (int dx = 0; dx < size.x; dx += step.x)
+            for (int dy = 0; dy < size.y; dy += step.y)
+            {
+                var anchor = new Vector2Int(part.Origin.x + dx, part.Origin.y + dy);
+
+                // Every cell of the patch that lies under the part has to be a stud cell. Cells
+                // outside it do not count - the funnel's shelf is at the very edge of its footprint,
+                // so half of any patch under it hangs over open air, and demanding studs there finds
+                // nowhere at all to build. What matters is not standing under the hole.
+                bool solid = true;
+
+                for (int x = 0; x < step.x && solid; x++)
+                for (int y = 0; y < step.y; y++)
+                {
+                    int wx = anchor.x + x, wy = anchor.y + y;
+
+                    if (!Covers(part, wx, wy))
+                        continue;
+
+                    if (!part.HasTopStudAt(wx, wy))
+                    {
+                        solid = false;
+                        break;
+                    }
+                }
+
+                if (!solid || !Solid(part, anchor, pillar) || !seen.Add(anchor))
+                    continue;
+
+                yield return (anchor, UndersideLayer(part, anchor, pillar, part.Origin.layer), "under studs");
+            }
         }
 
         /// <summary>

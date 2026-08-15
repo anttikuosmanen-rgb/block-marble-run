@@ -16,7 +16,17 @@ namespace BlockMarbleRun.EditorTools.Import
     public sealed class PartAnalysis
     {
         public const float StudPitchMm = 16.0f;
-        public const float LayerHeightMm = 19.2f;
+        /// <summary>One grid layer. Half a brick, so plates have somewhere to stand.</summary>
+        public const float LayerHeightMm = 9.6f;
+
+        /// <summary>
+        /// One brick. What channel floors are spaced by.
+        ///
+        /// Deliberately not the grid layer. A channel floor sits 6.4 mm above a brick boundary, and
+        /// that is what tells a mouth from a wall - measuring it in half-bricks would accept a wall
+        /// at 16.0 as a mouth and invent ports all over parts that have none.
+        /// </summary>
+        public const float BrickPitchMm = 19.2f;
         public const float StudHeightMm = 4.6f;
         public const float ClearanceMm = 0.2f;
 
@@ -30,6 +40,9 @@ namespace BlockMarbleRun.EditorTools.Import
         public int HeightLayers;
         public bool HasTopStuds;
         public bool[] TopStuds;
+
+        /// <summary>Cells whose underside is flat against the base - where the part can clutch down.</summary>
+        public bool[] BottomSockets;
 
         /// <summary>
         /// Offset from the mesh's own origin to the centre of its bounding box, in world units.
@@ -77,6 +90,7 @@ namespace BlockMarbleRun.EditorTools.Import
             a.DerivePivot();
             a.DeriveLayerMasks(facets);
             a.DeriveTopStuds(facets);
+            a.DeriveBottomSockets(facets);
             a.DerivePorts(facets);
             a.DeriveTunnel(facets);
             a.DeriveChirality(facets);
@@ -115,7 +129,25 @@ namespace BlockMarbleRun.EditorTools.Import
                 Warnings.Add($"Height {h:0.##} mm is not layers*{LayerHeightMm} (+{StudHeightMm}); guessed {HeightLayers} layer(s).");
         }
 
-        static bool IsNearMultiple(float value, float step, float tolerance = 0.5f) =>
+        /// <summary>
+        /// Whether a measurement is a whole number of steps, within the slop a modelled part carries.
+        ///
+        /// 0.8 mm rather than 0.5. Two of the imported pillars are about half a millimetre over their
+        /// nominal height, and at 0.5 one of them fell outside while the other did not - so a pillar
+        /// with studs on top was read as having none, and nothing could be stacked on it. The parts
+        /// are correct; the tolerance was narrower than the accuracy anything gets exported with.
+        ///
+        /// Still far tighter than the smallest thing being told apart: a stud is 4.6 mm, so there is
+        /// no reading of 0.8 that confuses a studded top with a flat one.
+        /// </summary>
+        /// <summary>How many studs a measurement spans, allowing for a modelled part's own slop.</summary>
+        static int StudsAcross(float sizeMm) =>
+            Mathf.Max(1, Mathf.CeilToInt((sizeMm + ClearanceMm - FootprintToleranceMm) / StudPitchMm));
+
+        /// <summary>Overshoot a part may have and still count as the smaller footprint.</summary>
+        const float FootprintToleranceMm = 0.6f;
+
+        static bool IsNearMultiple(float value, float step, float tolerance = 0.8f) =>
             Mathf.Abs(value - Mathf.Round(value / step) * step) <= tolerance;
 
         /// <summary>
@@ -126,9 +158,13 @@ namespace BlockMarbleRun.EditorTools.Import
         /// </summary>
         void DeriveFootprint(List<StlFacet> facets)
         {
+            // The slack is in millimetres, not in studs. A part is meant to measure n*16 - 0.2, and
+            // the fractional 0.01 allowed only 0.16 mm of overshoot - so a 6-stud plate exported at
+            // 96.00 instead of 95.80 was rounded up to seven studs, taking its whole grid with it.
+            // 0.6 mm absorbs that while still rounding a genuinely larger part up.
             FootprintSize = new Vector2Int(
-                Mathf.Max(1, Mathf.CeilToInt((SizeMm.x + ClearanceMm) / StudPitchMm - 0.01f)),
-                Mathf.Max(1, Mathf.CeilToInt((SizeMm.y + ClearanceMm) / StudPitchMm - 0.01f)));
+                StudsAcross(SizeMm.x),
+                StudsAcross(SizeMm.y));
 
             float expectedX = FootprintSize.x * StudPitchMm - ClearanceMm;
             float expectedY = FootprintSize.y * StudPitchMm - ClearanceMm;
@@ -223,12 +259,18 @@ namespace BlockMarbleRun.EditorTools.Import
                 if (float.IsPositiveInfinity(lowest[cell]))
                     continue;
 
+                // Studs are not occupancy. They stand 4.6 mm proud, which is half of a 9.6 mm layer
+                // and comfortably over the share needed to claim one - so a shelf with studs on it
+                // claimed the layer above as well, and anything clutched onto that shelf was placed a
+                // plate too high. The stud belongs to whatever clutches onto it, not to this part.
+                float top = IsStudTop(highest[cell]) ? highest[cell] - StudHeightMm : highest[cell];
+
                 for (int layer = 0; layer < layers; layer++)
                 {
                     float from = MinMm.z + layer * LayerHeightMm;
                     float to = from + LayerHeightMm;
 
-                    float overlap = Mathf.Min(highest[cell], to) - Mathf.Max(lowest[cell], from);
+                    float overlap = Mathf.Min(top, to) - Mathf.Max(lowest[cell], from);
                     if (overlap >= LayerHeightMm * requiredShare)
                         LayerMasks[layer * cells + cell] = true;
                 }
@@ -253,33 +295,76 @@ namespace BlockMarbleRun.EditorTools.Import
         }
 
         /// <summary>
-        /// Studs are whatever pokes above the part's body height. Their cells are the connection mask,
-        /// which is what separates a studded bridge from a terminal track piece.
+        /// Studs are cells whose highest point stands a stud's height above a layer boundary.
+        ///
+        /// The old rule was "anything poking above the part's body height", which works only while
+        /// the studs are the tallest thing on the part. They are, on every brick and every length of
+        /// track - and they are not on a funnel, whose rim stands higher than the shelf it offers to
+        /// the next piece. That part came in with no studs at all and nothing could be clutched to
+        /// it, though four of them are plainly there.
+        ///
+        /// Measuring each cell against the grid instead asks the question the geometry answers: a
+        /// stud is 4.6 mm of boss on top of a whole number of layers. A rim at 28.4 is 23.8 above a
+        /// boundary and fails; a shelf at 19.2 with studs to 23.8 passes; and a plain track top at
+        /// 19.2 is 14.6 above the layer below it and fails, which is what keeps a flat piece flat.
         /// </summary>
         void DeriveTopStuds(List<StlFacet> facets)
         {
-            TopStuds = new bool[FootprintSize.x * FootprintSize.y];
-            if (!HasTopStuds)
-                return;
+            int cells = FootprintSize.x * FootprintSize.y;
+            TopStuds = new bool[cells];
 
-            float bodyTop = MinMm.z + HeightLayers * LayerHeightMm + 0.5f;
+            var highest = new float[cells];
+            for (int i = 0; i < cells; i++)
+                highest[i] = float.NegativeInfinity;
 
             foreach (StlFacet f in facets)
             {
-                MarkStud(f.A, bodyTop);
-                MarkStud(f.B, bodyTop);
-                MarkStud(f.C, bodyTop);
+                Raise(highest, f.A);
+                Raise(highest, f.B);
+                Raise(highest, f.C);
             }
+
+            bool any = false;
+
+            for (int i = 0; i < cells; i++)
+            {
+                if (float.IsNegativeInfinity(highest[i]))
+                    continue;
+
+                if (!IsStudTop(highest[i]))
+                    continue;
+
+                TopStuds[i] = true;
+                any = true;
+            }
+
+            HasTopStuds = any;
         }
 
-        void MarkStud(Vector3 v, float bodyTop)
+        /// <summary>
+        /// Whether a column's highest point is the top of a stud: a boss standing a stud's height
+        /// above a whole number of layers.
+        ///
+        /// One rule, asked by both the stud mask and the occupancy mask, so the two cannot disagree
+        /// about what a stud is - and disagreeing is exactly how a shelf ends up offering studs at
+        /// one height while claiming to be a layer taller.
+        /// </summary>
+        bool IsStudTop(float highestZ)
         {
-            if (v.z < bodyTop)
-                return;
+            float withoutStud = highestZ - MinMm.z - StudHeightMm;
 
+            // At least one whole layer under it. Without this the test passes at zero, and a part
+            // with nothing on it at all reads as studs sitting on the ground.
+            return withoutStud >= LayerHeightMm - 0.8f && IsNearMultiple(withoutStud, LayerHeightMm);
+        }
+
+        void Raise(float[] highest, Vector3 v)
+        {
             int cx = Mathf.Clamp(Mathf.FloorToInt((v.x - MinMm.x) / StudPitchMm), 0, FootprintSize.x - 1);
             int cy = Mathf.Clamp(Mathf.FloorToInt((v.y - MinMm.y) / StudPitchMm), 0, FootprintSize.y - 1);
-            TopStuds[cy * FootprintSize.x + cx] = true;
+
+            int index = cy * FootprintSize.x + cx;
+            highest[index] = Mathf.Max(highest[index], v.z);
         }
 
         // --- Ports (DESIGN.md §6) -------------------------------------------------------------
@@ -321,6 +406,91 @@ namespace BlockMarbleRun.EditorTools.Import
             ScanEdge(height, w, h, Facing.East, inset);
             ScanEdge(height, w, h, Facing.South, inset);
             ScanEdge(height, w, h, Facing.North, inset);
+        }
+
+        /// <summary>
+        /// Which cells have an antistud: the ones whose underside is flat against the part's base.
+        ///
+        /// Derived rather than assumed. It used to be a copy of the footprint - every cell the part
+        /// covered was declared to have a socket - which is true of a brick and false of half of
+        /// anything else. A slide's underside is the back of its channel, curving well above the base
+        /// plane, and a tunnel's underside is its roof; neither can clutch onto a stud, and neither
+        /// should have a support pillar built up into it.
+        ///
+        /// Measured by area, not by a single point. Any cell touching an outer wall has some geometry
+        /// reaching the base, so asking whether anything reaches it marks the whole part.
+        /// </summary>
+        void DeriveBottomSockets(List<StlFacet> facets)
+        {
+            int cells = FootprintSize.x * FootprintSize.y;
+            BottomSockets = new bool[cells];
+
+            int w = Mathf.CeilToInt(SizeMm.x / HeightMapRes) + 1;
+            int h = Mathf.CeilToInt(SizeMm.y / HeightMapRes) + 1;
+
+            if (w <= 0 || h <= 0)
+                return;
+
+            // The lowest surface over each sample, which is the part seen from below.
+            var floor = new float[w * h];
+            for (int i = 0; i < floor.Length; i++)
+                floor[i] = float.PositiveInfinity;
+
+            foreach (StlFacet f in facets)
+            {
+                float minX = Mathf.Min(f.A.x, Mathf.Min(f.B.x, f.C.x));
+                float maxX = Mathf.Max(f.A.x, Mathf.Max(f.B.x, f.C.x));
+                float minY = Mathf.Min(f.A.y, Mathf.Min(f.B.y, f.C.y));
+                float maxY = Mathf.Max(f.A.y, Mathf.Max(f.B.y, f.C.y));
+                float minZ = Mathf.Min(f.A.z, Mathf.Min(f.B.z, f.C.z));
+
+                int i0 = Mathf.Clamp(Mathf.FloorToInt((minX - MinMm.x) / HeightMapRes), 0, w - 1);
+                int i1 = Mathf.Clamp(Mathf.CeilToInt((maxX - MinMm.x) / HeightMapRes), 0, w - 1);
+                int j0 = Mathf.Clamp(Mathf.FloorToInt((minY - MinMm.y) / HeightMapRes), 0, h - 1);
+                int j1 = Mathf.Clamp(Mathf.CeilToInt((maxY - MinMm.y) / HeightMapRes), 0, h - 1);
+
+                for (int i = i0; i <= i1; i++)
+                for (int j = j0; j <= j1; j++)
+                {
+                    int index = j * w + i;
+                    if (minZ < floor[index])
+                        floor[index] = minZ;
+                }
+            }
+
+            // A socket's rim sits on the base plane. Half a millimetre of slack for a modelled part.
+            float atBase = MinMm.z + 0.5f;
+
+            // Enough of the cell to stand on. A quarter catches a socket rim, which is a ring rather
+            // than a disc, while rejecting the sliver of outer wall that crosses a tunnel's cell.
+            const float requiredShare = 0.25f;
+
+            var touching = new int[cells];
+            var covered = new int[cells];
+
+            for (int j = 0; j < h; j++)
+            for (int i = 0; i < w; i++)
+            {
+                float z = floor[j * w + i];
+                if (float.IsPositiveInfinity(z))
+                    continue;
+
+                float x = MinMm.x + i * HeightMapRes;
+                float y = MinMm.y + j * HeightMapRes;
+
+                int cx = Mathf.Clamp(Mathf.FloorToInt((x - MinMm.x) / StudPitchMm), 0, FootprintSize.x - 1);
+                int cy = Mathf.Clamp(Mathf.FloorToInt((y - MinMm.y) / StudPitchMm), 0, FootprintSize.y - 1);
+
+                int cell = cy * FootprintSize.x + cx;
+
+                covered[cell]++;
+                if (z <= atBase)
+                    touching[cell]++;
+            }
+
+            for (int cell = 0; cell < cells; cell++)
+                BottomSockets[cell] = covered[cell] > 0 &&
+                                      touching[cell] >= covered[cell] * requiredShare;
         }
 
         float[] BuildHeightMap(List<StlFacet> facets, int w, int h)
@@ -514,8 +684,8 @@ namespace BlockMarbleRun.EditorTools.Import
         /// </summary>
         static bool IsChannelFloor(float measured, out float snapped)
         {
-            int layer = Mathf.RoundToInt((measured - ChannelFloorMm) / LayerHeightMm);
-            snapped = layer * LayerHeightMm + ChannelFloorMm;
+            int layer = Mathf.RoundToInt((measured - ChannelFloorMm) / BrickPitchMm);
+            snapped = layer * BrickPitchMm + ChannelFloorMm;
 
             return layer >= 0 && Mathf.Abs(measured - snapped) <= ChannelToleranceMm;
         }

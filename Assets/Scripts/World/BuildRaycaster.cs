@@ -140,7 +140,7 @@ namespace BlockMarbleRun.World
         static int LayerAbove(Collider collider, GridCoord hitCell)
         {
             var marker = collider.GetComponentInParent<PlacedPartMarker>();
-            return marker != null ? marker.Part.TopLayer : hitCell.layer + 1;
+            return marker != null ? marker.Part.TopLayerAt(hitCell.x, hitCell.y) : hitCell.layer + 1;
         }
     }
 }

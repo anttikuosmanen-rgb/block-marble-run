@@ -18,14 +18,15 @@ MonoBehaviour:
   mesh: {fileID: -8670151273213183110, guid: 47c8dc8e26afb4f618837e53df6f579c, type: 3}
   colliderPrefab: {fileID: 0}
   icon: {fileID: 2800000, guid: 65f2da4d09c314fce911de74a55482d8, type: 3}
+  selectable: 1
   footprintSize: {x: 4, y: 4}
   footprintMask: 01010000010101000101010101010101
-  layerMasks: 01010000010101000101010100010101
-  heightLayers: 1
+  layerMasks: 0101000001010000010101010001010101010000010101000101010100010101
+  heightLayers: 2
   pivotOffsetUnits: {x: 0.000000003799796, y: 0.000000003799796}
   hasTunnel: 1
   topStuds: 00000000000000000000000000000000
-  bottomSockets: 01010000010101000101010101010101
+  bottomSockets: 01010100000000000000000100000001
   rotation: 0
   ports:
   - midlineHalfStuds: {x: 8, y: 6}

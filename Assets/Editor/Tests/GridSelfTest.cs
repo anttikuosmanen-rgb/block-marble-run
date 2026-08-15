@@ -55,6 +55,10 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestLiftedGroundLevelTrackGetsSupports();
             TestSelectionTurnsInPlace();
             TestSelectionMirrorSwapsHandedParts();
+            TestProceduralPillarHeights();
+            TestStudsAreFoundByHeightAboveTheGrid();
+            TestPlatesAreHalfABrick();
+            TestStackingOnAStepAboveTheGround();
             TestScaffoldingLeavesRoomForTheDescendingPiece();
 
             string summary = $"[GridSelfTest] {_passed} passed, {_failed} failed.\n{_log}";
@@ -683,6 +687,17 @@ namespace BlockMarbleRun.EditorTools.Tests
 
                 checkedParts++;
 
+                // Everything a mirror inherits unchanged, checked as a set rather than one at a time.
+                // Mirror generation copies field by field, so the failure mode is not a wrong value
+                // but a missing line - and a missing line is invisible until a part behaves oddly.
+                // hasTunnel was the one that got away: the mirrored funnel lost the flag that routes
+                // a part to its real geometry, and was given a solid box for a collider.
+                Check($"{def.id} keeps its source's tunnel flag", def.hasTunnel == source.hasTunnel);
+                Check($"{def.id} keeps its source's height", def.heightLayers == source.heightLayers);
+                Check($"{def.id} keeps its source's footprint", def.footprintSize == source.footprintSize);
+                Check($"{def.id} keeps its source's port count",
+                    (def.ports?.Length ?? 0) == (source.ports?.Length ?? 0));
+
                 int plane = def.footprintSize.x * def.footprintSize.y;
                 int layers = Mathf.Max(1, def.heightLayers);
 
@@ -869,12 +884,17 @@ namespace BlockMarbleRun.EditorTools.Tests
                 return;
             }
 
+            ScaffoldBuilder.Plate = FindDefinition("building_block_2x2_plate");
+
             var map = new GridMap();
             var brick = new PlacedPart(pillar, new GridCoord(0, 0, 0), 0, 0);
-            var track = new PlacedPart(ramp, new GridCoord(0, 0, 1), 0, 0);
 
-            map.Add(brick);
-            map.Add(track);
+            // On top of the brick, not one layer above the ground: the grid steps half a brick now,
+            // so a brick standing on the floor fills layers 0 and 1 and the track goes at 2.
+            var track = new PlacedPart(ramp, new GridCoord(0, 0, pillar.heightLayers), 0, 0);
+
+            Check("the seeded brick goes down", map.Add(brick));
+            Check("the seeded track goes on top of it", map.Add(track));
 
             var all = new List<PlacedPart>(map.Parts);
             List<PlacedPart> moved = Assembly.Shift(map, all, 1);
@@ -916,6 +936,8 @@ namespace BlockMarbleRun.EditorTools.Tests
                 Check("lifted track test parts exist", false);
                 return;
             }
+
+            ScaffoldBuilder.Plate = FindDefinition("building_block_2x2_plate");
 
             var map = new GridMap();
             var track = new PlacedPart(ramp, new GridCoord(0, 0, 0), 0, 0);
@@ -1102,6 +1124,219 @@ namespace BlockMarbleRun.EditorTools.Tests
             Check("mirroring twice restores the origin", twice[0].Origin.Equals(part.Origin),
                 $"{twice[0].Origin} vs {part.Origin}");
             Check("mirroring twice restores the rotation", twice[0].Rotation == part.Rotation);
+        }
+
+        /// <summary>
+        /// A generated pillar is exactly as tall as it was asked to be, and refuses when it cannot be.
+        ///
+        /// Height is the whole contract: a support column one layer short leaves the run it carries
+        /// hanging, and one layer long lifts it off the thing it was joined to. The stretch has to
+        /// land on the grid exactly, not nearly.
+        /// </summary>
+        static void TestProceduralPillarHeights()
+        {
+            PartDefinition source = FindDefinition("pillar_2x2x7");
+
+            if (source?.mesh == null)
+            {
+                Check("pillar source part exists", false);
+                return;
+            }
+
+            Check("the pillar mesh is readable", source.mesh.isReadable,
+                "a template that cannot be read cannot be cut");
+
+            var pillars = new ProceduralPillars(source);
+
+            // What the modelled pillar carries over a whole number of layers - studs, and whatever
+            // the model is out by. The generated ones must carry exactly the same.
+            float overshoot = source.mesh.bounds.size.y - source.heightLayers * GridCoord.LayerUnits;
+
+            foreach (int layers in new[] { 3, 4, 7, 11, 25 })
+            {
+                PartDefinition def = pillars.ForLayers(layers);
+
+                if (layers < pillars.ShortestLayers)
+                {
+                    Check($"{layers} layers is refused as too short", def == null);
+                    continue;
+                }
+
+                Check($"a {layers} layer pillar is made", def != null);
+                if (def == null)
+                    continue;
+
+                Check($"{layers} layer pillar is {layers} layers", def.heightLayers == layers);
+
+                float expected = layers * GridCoord.LayerUnits + overshoot;
+
+                Check($"{layers} layer pillar measures its height",
+                    Mathf.Abs(def.mesh.bounds.size.y - expected) < 0.0005f,
+                    $"{def.mesh.bounds.size.y:0.0000} vs {expected:0.0000}");
+
+                // Stretching must not lose or add geometry: the shaft is moved, never rebuilt.
+                Check($"{layers} layer pillar keeps the source geometry",
+                    def.mesh.vertexCount == source.mesh.vertexCount);
+            }
+
+            Check("a pillar shorter than the base and top together is refused",
+                pillars.ForLayers(1) == null);
+
+            // The name is the contract with the save file.
+            ProceduralPillars.Active = pillars;
+            PartDefinition resolved = ProceduralPillars.Resolve(ProceduralPillars.IdPrefix + 9);
+
+            Check("a saved pillar id resolves back", resolved != null && resolved.heightLayers == 9);
+        }
+
+        /// <summary>
+        /// Studs are recognised on the parts that have them and not on the parts that do not.
+        ///
+        /// The rule changed from "anything above the part's body height" to "a boss standing a stud's
+        /// height above a layer boundary", because the first only works while the studs are the
+        /// tallest thing on the part - true of every brick, false of a funnel whose rim stands over
+        /// the shelf it offers. This pins the parts that were already right, since the risk in a rule
+        /// like this is not the part it was written for but the twenty it was not.
+        /// </summary>
+        static void TestStudsAreFoundByHeightAboveTheGrid()
+        {
+            void Studded(string id, bool expected)
+            {
+                PartDefinition def = FindDefinition(id);
+                if (def == null)
+                    return;   // a part this build does not carry is not a failure of the rule
+
+                bool any = false;
+                if (def.topStuds != null)
+                    foreach (bool stud in def.topStuds)
+                        any |= stud;
+
+                Check($"{id} {(expected ? "has" : "has no")} studs", any == expected);
+            }
+
+            // Things you stack on.
+            Studded("building_block_2x2", true);
+            Studded("building_block_2x6", true);
+            Studded("pillar_2x2x7", true);
+            Studded("pillar_2x2x10", true);
+
+            // A bridge is studded so track can cross over it.
+            Studded("bridge_2x3", true);
+
+            // Track a marble runs along has a clear top, and a terminal is a dead end, not a platform.
+            Studded("track_2x4", false);
+            Studded("slide_2x4", false);
+            Studded("terminal_2x2", false);
+        }
+
+        /// <summary>
+        /// Every brick has a plate, and a plate is exactly half of it.
+        ///
+        /// Half is the whole point: the grid steps half a brick so that half-height parts have
+        /// somewhere to stand, and a plate that came out a hair over would sit its studs off the grid
+        /// and refuse to carry anything. Its footprint and studs must be the brick's own, since it is
+        /// the same part with less wall.
+        /// </summary>
+        static void TestPlatesAreHalfABrick()
+        {
+            int checkedPlates = 0;
+
+            foreach (string id in new[] { "building_block_2x2", "building_block_2x6", "building_block_1x2" })
+            {
+                PartDefinition brick = FindDefinition(id);
+                PartDefinition plate = FindDefinition(id + "_plate");
+
+                if (brick == null || plate == null)
+                    continue;
+
+                checkedPlates++;
+
+                Check($"{id} plate is half the brick's layers",
+                    plate.heightLayers * 2 == brick.heightLayers,
+                    $"{plate.heightLayers} vs {brick.heightLayers}");
+
+                Check($"{id} plate keeps the footprint", plate.footprintSize == brick.footprintSize);
+
+                // Measured, not assumed: the mesh is where the compression could go wrong.
+                if (plate.mesh != null && brick.mesh != null)
+                {
+                    float removed = brick.mesh.bounds.size.y - plate.mesh.bounds.size.y;
+
+                    Check($"{id} plate mesh is one layer shorter",
+                        Mathf.Abs(removed - GridCoord.LayerUnits) < 0.0005f,
+                        $"removed {removed:0.0000}, wanted {GridCoord.LayerUnits:0.0000}");
+
+                    Check($"{id} plate keeps its footprint in x and z",
+                        Mathf.Abs(plate.mesh.bounds.size.x - brick.mesh.bounds.size.x) < 0.0005f &&
+                        Mathf.Abs(plate.mesh.bounds.size.z - brick.mesh.bounds.size.z) < 0.0005f);
+                }
+
+                bool brickStuds = false, plateStuds = false;
+                foreach (bool s in brick.topStuds ?? System.Array.Empty<bool>()) brickStuds |= s;
+                foreach (bool s in plate.topStuds ?? System.Array.Empty<bool>()) plateStuds |= s;
+
+                Check($"{id} plate keeps its studs", plateStuds == brickStuds);
+            }
+
+            Check("some plates exist to check", checkedPlates > 0);
+        }
+
+        /// <summary>
+        /// A part whose surface steps can be built on at each step, not only at its highest point.
+        ///
+        /// The funnel is the case: three layers tall at the rim, with a shelf one layer up that the
+        /// next piece is meant to clutch onto. Asking the part how tall it is answers about the rim,
+        /// so anything placed on the shelf was judged to be floating two layers below where the part
+        /// ended, and nothing could be stacked there at all.
+        /// </summary>
+        static void TestStackingOnAStepAboveTheGround()
+        {
+            PartDefinition funnel = FindDefinition("funnel_6x7");
+            PartDefinition brick = FindDefinition("building_block_2x2");
+
+            if (funnel == null || brick == null)
+            {
+                Check("funnel and brick exist", false);
+                return;
+            }
+
+            var map = new GridMap();
+            var part = new PlacedPart(funnel, new GridCoord(0, 0, 0), 0, 0);
+
+            Check("the funnel places on the ground", map.Add(part));
+
+            // Every column carrying a stud, and how high that column stands.
+            var shelves = new List<(int X, int Y, int Top)>();
+
+            for (int y = 0; y < funnel.footprintSize.y; y++)
+            for (int x = 0; x < funnel.footprintSize.x; x++)
+            {
+                if (!part.HasTopStudAt(x, y))
+                    continue;
+
+                shelves.Add((x, y, part.TopLayerAt(x, y)));
+            }
+
+            Check("the funnel offers studs somewhere", shelves.Count > 0);
+            if (shelves.Count == 0)
+                return;
+
+            // Below the rim, which is the whole point - a stud at the part's full height would have
+            // worked under the old rule and proves nothing.
+            bool stepped = false;
+            foreach ((int _, int _, int top) in shelves)
+                stepped |= top < part.TopLayer;
+
+            Check("its studs sit below the part's full height", stepped,
+                $"studs at {shelves[0].Top}, part top {part.TopLayer}");
+
+            foreach ((int x, int y, int top) in shelves)
+            {
+                var stacked = new PlacedPart(brick, new GridCoord(x, y, top), 0, 0);
+
+                Check($"a brick rests on the shelf at ({x},{y},{top})",
+                    map.CanPlace(stacked) != PlacementResult.Blocked && map.IsSupported(stacked));
+            }
         }
     }
 }

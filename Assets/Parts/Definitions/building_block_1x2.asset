@@ -18,10 +18,11 @@ MonoBehaviour:
   mesh: {fileID: -8670151273213183110, guid: e9a5a65cc65d2408892930de2c773e56, type: 3}
   colliderPrefab: {fileID: 0}
   icon: {fileID: 2800000, guid: 7275aa068b81c4694903285935ce33c5, type: 3}
+  selectable: 1
   footprintSize: {x: 2, y: 1}
   footprintMask: 0101
-  layerMasks: 0101
-  heightLayers: 1
+  layerMasks: 01010101
+  heightLayers: 2
   pivotOffsetUnits: {x: 0.000000003799796, y: -9.685754e-10}
   hasTunnel: 0
   topStuds: 0101
