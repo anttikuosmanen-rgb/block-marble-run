@@ -1,0 +1,440 @@
+Studs and antistuds, as derived from each part's geometry.
+
+  T  stud on top          o  antistud underneath
+  B  both                 .  part of the piece, neither
+  -  outside the piece's footprint
+
+Rows run with +y upward, columns with +x rightward, as the part sits
+unrotated. Grid layers are half a brick: a brick is 2, a plate 1.
+
+============================================================
+bridge_2x3
+  2 x 3 studs, 2 grid layers (1 bricks), has a way through it
+
+    B B 
+    B B 
+    B B 
+
+    6 stud cell(s), 6 antistud cell(s)
+
+============================================================
+building_block_1x2
+  2 x 1 studs, 2 grid layers (1 bricks)
+
+    B B 
+
+    2 stud cell(s), 2 antistud cell(s)
+
+============================================================
+building_block_1x2_plate
+  2 x 1 studs, 1 grid layers (0.5 bricks), not offered in the palette
+
+    B B 
+
+    2 stud cell(s), 2 antistud cell(s)
+
+============================================================
+building_block_2x10
+  2 x 10 studs, 2 grid layers (1 bricks)
+
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+
+    20 stud cell(s), 20 antistud cell(s)
+
+============================================================
+building_block_2x10_plate
+  2 x 10 studs, 1 grid layers (0.5 bricks), not offered in the palette
+
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+
+    20 stud cell(s), 20 antistud cell(s)
+
+============================================================
+building_block_2x2
+  2 x 2 studs, 2 grid layers (1 bricks)
+
+    B B 
+    B B 
+
+    4 stud cell(s), 4 antistud cell(s)
+
+============================================================
+building_block_2x2_plate
+  2 x 2 studs, 1 grid layers (0.5 bricks)
+
+    B B 
+    B B 
+
+    4 stud cell(s), 4 antistud cell(s)
+
+============================================================
+building_block_2x3
+  2 x 3 studs, 2 grid layers (1 bricks)
+
+    B B 
+    B B 
+    B B 
+
+    6 stud cell(s), 6 antistud cell(s)
+
+============================================================
+building_block_2x3_plate
+  2 x 3 studs, 1 grid layers (0.5 bricks), not offered in the palette
+
+    B B 
+    B B 
+    B B 
+
+    6 stud cell(s), 6 antistud cell(s)
+
+============================================================
+building_block_2x6
+  2 x 6 studs, 2 grid layers (1 bricks)
+
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+
+    12 stud cell(s), 12 antistud cell(s)
+
+============================================================
+building_block_2x6_plate
+  2 x 6 studs, 1 grid layers (0.5 bricks), not offered in the palette
+
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+
+    12 stud cell(s), 12 antistud cell(s)
+
+============================================================
+building_block_2x8
+  2 x 8 studs, 2 grid layers (1 bricks)
+
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+
+    16 stud cell(s), 16 antistud cell(s)
+
+============================================================
+building_block_2x8_plate
+  2 x 8 studs, 1 grid layers (0.5 bricks), not offered in the palette
+
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+    B B 
+
+    16 stud cell(s), 16 antistud cell(s)
+
+============================================================
+crossing_2x2
+  2 x 2 studs, 2 grid layers (1 bricks), 4 channel mouth(s)
+
+    o o 
+    o o 
+
+    0 stud cell(s), 4 antistud cell(s)
+
+============================================================
+curve_2x2
+  2 x 2 studs, 2 grid layers (1 bricks), 2 channel mouth(s)
+
+    o o 
+    o o 
+
+    0 stud cell(s), 4 antistud cell(s)
+
+============================================================
+curve_4x4
+  4 x 4 studs, 2 grid layers (1 bricks), has a way through it, 2 channel mouth(s)
+
+    . . . o 
+    . . . o 
+    . . . - 
+    o o - - 
+
+    0 stud cell(s), 4 antistud cell(s)
+
+============================================================
+funnel_10x10
+  10 x 10 studs, 3 grid layers (1.5 bricks), has a way through it
+
+    - - . . o o . . B B 
+    - . . . o o . . o o 
+    . . . . o o . . o o 
+    . . . o . . o . . . 
+    o o o . o o . o o o 
+    o o o . o o . o o o 
+    . . . o . . o . . . 
+    . . . . o o . . . . 
+    - . . . o o . . . - 
+    - - . . o o . . - - 
+
+    2 stud cell(s), 38 antistud cell(s)
+
+============================================================
+funnel_10x10_mirror
+  10 x 10 studs, 3 grid layers (1.5 bricks), has a way through it
+
+    B B . . o o . . - - 
+    o o . . o o . . . - 
+    o o . . o o . . . . 
+    . . . o . . o . . . 
+    o o o . o o . o o o 
+    o o o . o o . o o o 
+    . . . o . . o . . . 
+    . . . . o o . . . . 
+    - . . . o o . . . - 
+    - - . . o o . . - - 
+
+    2 stud cell(s), 38 antistud cell(s)
+
+============================================================
+funnel_6x7
+  6 x 7 studs, 3 grid layers (1.5 bricks), has a way through it
+
+    - - - - B B 
+    . . o o o o 
+    . . o o . - 
+    o o o o o o 
+    o o o o o o 
+    . . o o . . 
+    . . o o . . 
+
+    2 stud cell(s), 24 antistud cell(s)
+
+============================================================
+funnel_6x7_mirror
+  6 x 7 studs, 3 grid layers (1.5 bricks), has a way through it
+
+    B B - - - - 
+    o o o o . . 
+    - . o o . . 
+    o o o o o o 
+    o o o o o o 
+    . . o o . . 
+    . . o o . . 
+
+    2 stud cell(s), 24 antistud cell(s)
+
+============================================================
+funnel_8x9
+  8 x 9 studs, 3 grid layers (1.5 bricks), has a way through it
+
+    - - - - - - B B 
+    - . . o o . o o 
+    . . . o o . o o 
+    . . o o o o . - 
+    o o o o o o o o 
+    o o o o o o o o 
+    . . . o o o . . 
+    . . . o o . . . 
+    - . . o o . . - 
+
+    2 stud cell(s), 37 antistud cell(s)
+
+============================================================
+funnel_8x9_mirror
+  8 x 9 studs, 3 grid layers (1.5 bricks), has a way through it
+
+    B B - - - - - - 
+    o o . o o . . - 
+    o o . o o . . . 
+    - . o o o o . . 
+    o o o o o o o o 
+    o o o o o o o o 
+    . . o o o . . . 
+    . . . o o . . . 
+    - . . o o . . - 
+
+    2 stud cell(s), 37 antistud cell(s)
+
+============================================================
+pillar_2x2x10
+  2 x 2 studs, 20 grid layers (10 bricks)
+
+    B B 
+    B B 
+
+    4 stud cell(s), 4 antistud cell(s)
+
+============================================================
+pillar_2x2x7
+  2 x 2 studs, 14 grid layers (7 bricks)
+
+    B B 
+    B B 
+
+    4 stud cell(s), 4 antistud cell(s)
+
+============================================================
+slide_2x2
+  2 x 2 studs, 4 grid layers (2 bricks), 2 channel mouth(s)
+
+    o o 
+    o o 
+
+    0 stud cell(s), 4 antistud cell(s)
+
+============================================================
+slide_2x4
+  2 x 4 studs, 4 grid layers (2 bricks), 2 channel mouth(s)
+
+    o o 
+    o o 
+    o o 
+    o o 
+
+    0 stud cell(s), 8 antistud cell(s)
+
+============================================================
+slide_curve_4x4
+  4 x 4 studs, 4 grid layers (2 bricks), has a way through it, 2 channel mouth(s)
+
+    o o - - 
+    . . . - 
+    . . . o 
+    . . . o 
+
+    0 stud cell(s), 4 antistud cell(s)
+
+============================================================
+slide_curve_4x4_mirror
+  4 x 4 studs, 4 grid layers (2 bricks), has a way through it, 2 channel mouth(s)
+
+    - - o o 
+    - . . . 
+    o . . . 
+    o . . . 
+
+    0 stud cell(s), 4 antistud cell(s)
+
+============================================================
+terminal_2x2
+  2 x 2 studs, 2 grid layers (1 bricks), 1 channel mouth(s)
+
+    o o 
+    o o 
+
+    0 stud cell(s), 4 antistud cell(s)
+
+============================================================
+track_2x2
+  2 x 2 studs, 2 grid layers (1 bricks), 2 channel mouth(s)
+
+    o o 
+    o o 
+
+    0 stud cell(s), 4 antistud cell(s)
+
+============================================================
+track_2x4
+  2 x 4 studs, 2 grid layers (1 bricks), 2 channel mouth(s)
+
+    o o 
+    o o 
+    o o 
+    o o 
+
+    0 stud cell(s), 8 antistud cell(s)
+
+============================================================
+track_2x6
+  2 x 6 studs, 2 grid layers (1 bricks), 2 channel mouth(s)
+
+    o o 
+    o o 
+    o o 
+    o o 
+    o o 
+    o o 
+
+    0 stud cell(s), 12 antistud cell(s)
+
+============================================================
+track_2x8
+  2 x 8 studs, 2 grid layers (1 bricks), 2 channel mouth(s)
+
+    o o 
+    o o 
+    o o 
+    o o 
+    o o 
+    o o 
+    o o 
+    o o 
+
+    0 stud cell(s), 16 antistud cell(s)
+
+============================================================
+u_turn
+  5 x 6 studs, 2 grid layers (1 bricks), has a way through it, 2 channel mouth(s)
+
+    o o . . - 
+    o o . . . 
+    B B . . . 
+    B B . . . 
+    o o . . . 
+    o o . . - 
+
+    4 stud cell(s), 12 antistud cell(s)
+
+============================================================
+u_turn_slide
+  6 x 5 studs, 4 grid layers (2 bricks), has a way through it, 2 channel mouth(s)
+
+    . . . . . . 
+    . o . . o . 
+    . . . . . . 
+    o o B B o o 
+    o o B B o o 
+
+    4 stud cell(s), 14 antistud cell(s)
+
+============================================================
+u_turn_slide_mirror
+  6 x 5 studs, 4 grid layers (2 bricks), has a way through it, 2 channel mouth(s)
+
+    . . . . . . 
+    . o . . o . 
+    . . . . . . 
+    o o B B o o 
+    o o B B o o 
+
+    4 stud cell(s), 14 antistud cell(s)
+

@@ -24,6 +24,9 @@ namespace BlockMarbleRun.Build
         public BuildRaycaster raycaster;
         public OrbitCamera orbitCamera;
         public GhostPreview ghost;
+
+        [Tooltip("Alignment lines drawn from the piece being placed. Optional.")]
+        public AlignmentGuides guides;
         public Transform partRoot;
         public Material highlightMaterial;
         public PartPalette palette;
@@ -75,6 +78,7 @@ namespace BlockMarbleRun.Build
             CurrentTool = tool;
             if (tool != Tool.Place)
                 ghost.Hide();
+                guides?.Hide();
         }
 
         public int SelectedIndex => _partIndex;
@@ -198,6 +202,7 @@ namespace BlockMarbleRun.Build
                 _boxStart = screen;
                 _boxEnd = screen;
                 ghost.Hide();
+                guides?.Hide();
                 return true;
             }
 
@@ -302,6 +307,10 @@ namespace BlockMarbleRun.Build
                 // back to the player's own facing, and there R was still incrementing a variant that
                 // nothing in that path reads - so a channel piece placed out in the open could not be
                 // turned at all. Bricks were never affected; they have no ports and always rotated.
+                // A join outranks a turn, held or not. R has two jobs and they are not equal: where
+                // the piece can meet a channel mouth, stepping through those meetings is what the
+                // player is choosing between, and turning it a quarter is what R means only when
+                // there is no mouth to meet.
                 if (Selected?.ports is { Length: > 0 } && VariantCount > 1)
                     _variant++;
                 else
@@ -578,6 +587,7 @@ namespace BlockMarbleRun.Build
             Mouse mouse = Mouse.current;
 
             ghost.Hide();
+            guides?.Hide();
 
             if (mouse == null)
                 return true;
@@ -1011,6 +1021,7 @@ namespace BlockMarbleRun.Build
             if (palette != null && palette.Covers(screen))
             {
                 ghost.Hide();
+                guides?.Hide();
                 return;
             }
 
@@ -1018,6 +1029,7 @@ namespace BlockMarbleRun.Build
             if (mouse.rightButton.isPressed || mouse.middleButton.isPressed)
             {
                 ghost.Hide();
+                guides?.Hide();
                 return;
             }
 
@@ -1027,6 +1039,7 @@ namespace BlockMarbleRun.Build
             if (deleteMode)
             {
                 ghost.Hide();
+                guides?.Hide();
                 if (mouse.leftButton.wasPressedThisFrame)
                     TryDelete(screen);
                 return;
@@ -1035,12 +1048,18 @@ namespace BlockMarbleRun.Build
             if (CurrentTool == Tool.Grab)
             {
                 ghost.Hide();
+
+                // What the selection is standing on, which is what you check before moving it.
+                if (guides != null)
+                    guides.Show(_map, _selection.Parts);
+
                 return; // handled by the box-select pass, which also picks on a click
             }
 
             if (CurrentTool == Tool.Paint)
             {
                 ghost.Hide();
+                guides?.Hide();
 
                 // Held, not just pressed, so a colour can be brushed across several pieces.
                 if (mouse.leftButton.isPressed)
@@ -1053,6 +1072,7 @@ namespace BlockMarbleRun.Build
             if (!hit.Valid)
             {
                 ghost.Hide();
+                guides?.Hide();
                 return;
             }
 
@@ -1108,6 +1128,9 @@ namespace BlockMarbleRun.Build
 
             ghost.Show(candidate, needsGrowth ? PlacementResult.Unsupported : result,
                 factory.Catalog.ColorAt(_colorIndex));
+
+            if (guides != null)
+                guides.Show(_map, candidate);
 
             if (mouse.leftButton.wasPressedThisFrame && needsGrowth)
             {
@@ -1332,10 +1355,15 @@ namespace BlockMarbleRun.Build
             GridCoord at = _lockedPlacement.Origin;
             PartDefinition def = _lockedPlacement.Definition;
 
+            // A join first: the placements this piece could make against a mouth near where it is
+            // being held, stepped through by the same key. Only when there is no such join does R
+            // mean turn it a quarter where it stands.
             if (def.ports is { Length: > 0 })
             {
-                List<PlacedPart> ranked = PlacementSolver.SolveRanked(_map, def, at.x, at.y, _rotation, _colorIndex);
-                if (ranked.Count > 0)
+                List<PlacedPart> ranked = PlacementSolver.SolveRanked(_map, def, at.x, at.y,
+                    _rotation, _colorIndex);
+
+                if (ranked.Count > 1)
                 {
                     _variant = ((_variant % ranked.Count) + ranked.Count) % ranked.Count;
                     _lockedPlacement = ranked[_variant];

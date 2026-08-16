@@ -481,13 +481,16 @@ namespace BlockMarbleRun.EditorTools.Import
             for (int i = 0; i < floor.Length; i++)
                 floor[i] = float.PositiveInfinity;
 
+            // Rasterised exactly. A bounding-box fill marks the samples a triangle merely spans, and
+            // for the underside that means lowering cells the part does not reach into - a slide
+            // curve came out with an antistud in a corner made entirely of empty air, because the
+            // box of a face on the curve overhung it.
             foreach (StlFacet f in facets)
             {
                 float minX = Mathf.Min(f.A.x, Mathf.Min(f.B.x, f.C.x));
                 float maxX = Mathf.Max(f.A.x, Mathf.Max(f.B.x, f.C.x));
                 float minY = Mathf.Min(f.A.y, Mathf.Min(f.B.y, f.C.y));
                 float maxY = Mathf.Max(f.A.y, Mathf.Max(f.B.y, f.C.y));
-                float minZ = Mathf.Min(f.A.z, Mathf.Min(f.B.z, f.C.z));
 
                 int i0 = Mathf.Clamp(Mathf.FloorToInt((minX - MinMm.x) / HeightMapRes), 0, w - 1);
                 int i1 = Mathf.Clamp(Mathf.CeilToInt((maxX - MinMm.x) / HeightMapRes), 0, w - 1);
@@ -497,21 +500,43 @@ namespace BlockMarbleRun.EditorTools.Import
                 for (int i = i0; i <= i1; i++)
                 for (int j = j0; j <= j1; j++)
                 {
+                    float x = MinMm.x + i * HeightMapRes;
+                    float y = MinMm.y + j * HeightMapRes;
+
+                    if (!Covers(f, x, y, out float z))
+                        continue;
+
                     int index = j * w + i;
-                    if (minZ < floor[index])
-                        floor[index] = minZ;
+                    if (z < floor[index])
+                        floor[index] = z;
                 }
             }
 
-            // A socket's rim sits on the base plane. Half a millimetre of slack for a modelled part.
-            float atBase = MinMm.z + 0.5f;
+            // A socket's rim sits on a layer boundary - not necessarily the part's own base. A slide
+            // curve carries one pair of antistuds on the floor and another a whole brick up under its
+            // raised mouth, and testing only the base plane found the first pair and missed the
+            // second, so half the piece looked as though it could not be clutched to anything.
+            const float slack = 0.5f;
 
-            // Enough of the cell to stand on. A quarter catches a socket rim, which is a ring rather
-            // than a disc, while rejecting the sliver of outer wall that crosses a tunnel's cell.
-            const float requiredShare = 0.25f;
+            // Measured rather than picked. With the underside rasterised exactly, a cell with an
+            // antistud reads between 21% and 36% - the rim and the tube walls, since the rest of the
+            // underside is hollow - and a cell without one reads zero. Anywhere in between separates
+            // them; 0.15 sits clear of both edges.
+            //
+            // The old 0.25 was tuned against a bounding-box fill, which smeared every rim across its
+            // whole cell and inflated the real figures past it. Once the fill was corrected the
+            // threshold was cutting through the middle of the true range, and a slide came out with
+            // one antistud instead of eight.
+            const float requiredShare = 0.15f;
 
-            var touching = new int[cells];
             var covered = new int[cells];
+
+            // Counted per layer, because a cell's underside is flat at one height and a part may
+            // carry antistuds at more than one. The best-supported boundary in each cell is the one
+            // that decides it.
+            var flatAt = new Dictionary<int, int>[cells];
+            for (int i = 0; i < cells; i++)
+                flatAt[i] = new Dictionary<int, int>();
 
             for (int j = 0; j < h; j++)
             for (int i = 0; i < w; i++)
@@ -527,15 +552,28 @@ namespace BlockMarbleRun.EditorTools.Import
                 int cy = Mathf.Clamp(Mathf.FloorToInt((y - MinMm.y) / StudPitchMm), 0, FootprintSize.y - 1);
 
                 int cell = cy * FootprintSize.x + cx;
-
                 covered[cell]++;
-                if (z <= atBase)
-                    touching[cell]++;
+
+                float above = z - MinMm.z;
+                int layer = Mathf.RoundToInt(above / LayerHeightMm);
+
+                if (layer < 0 || Mathf.Abs(above - layer * LayerHeightMm) > slack)
+                    continue;
+
+                flatAt[cell][layer] = flatAt[cell].TryGetValue(layer, out int n) ? n + 1 : 1;
             }
 
             for (int cell = 0; cell < cells; cell++)
-                BottomSockets[cell] = covered[cell] > 0 &&
-                                      touching[cell] >= covered[cell] * requiredShare;
+            {
+                if (covered[cell] == 0)
+                    continue;
+
+                int best = 0;
+                foreach (KeyValuePair<int, int> at in flatAt[cell])
+                    best = Mathf.Max(best, at.Value);
+
+                BottomSockets[cell] = best >= covered[cell] * requiredShare;
+            }
         }
 
         /// <summary>

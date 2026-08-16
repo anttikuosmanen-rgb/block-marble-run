@@ -163,19 +163,30 @@ namespace BlockMarbleRun.Grid
             if (HasPortConnection(part))
                 return true;
 
+            // Asked per column, at that column's own underside. Testing only the part's base layer
+            // works while a part is flat underneath and misses everything else: a slide curve carries
+            // antistuds on the floor at one end and a whole brick up at the other, and the raised
+            // pair could never meet a stud however exactly it was lined up over one.
+            var asked = new HashSet<Vector2Int>();
+
             foreach (GridCoord cell in part.OccupiedCells())
             {
-                if (cell.layer != part.Origin.layer)
+                var column = new Vector2Int(cell.x, cell.y);
+                if (!asked.Add(column))
                     continue;
 
-                PlacedPart below = _cells.GetValueOrDefault(cell.Below);
-                if (below == null)
+                int underside = part.UndersideLayerAt(column.x, column.y);
+                if (underside <= 0)
+                    return true;   // that column reaches the ground
+
+                PlacedPart below = _cells.GetValueOrDefault(new GridCoord(column.x, column.y, underside - 1));
+                if (below == null || below == part)
                     continue;
 
                 // The supporting part must actually end at this layer; a tall part passing through
                 // the cell below offers its side, not its top.
-                if (below.TopLayerAt(cell.x, cell.y) == part.Origin.layer &&
-                    below.HasTopStudAt(cell.x, cell.y))
+                if (below.TopLayerAt(column.x, column.y) == underside &&
+                    below.HasTopStudAt(column.x, column.y))
                     return true;
             }
 

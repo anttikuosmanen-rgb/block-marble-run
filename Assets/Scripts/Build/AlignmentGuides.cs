@@ -1,0 +1,366 @@
+using System.Collections.Generic;
+using BlockMarbleRun.Grid;
+using BlockMarbleRun.Parts;
+using UnityEngine;
+
+namespace BlockMarbleRun.Build
+{
+    /// <summary>
+    /// Thin lines from the corners of the piece being placed to whatever they line up with.
+    ///
+    /// A ghost floating in the air tells you where a piece is but not what it is over, and at any
+    /// distance a stud is a few pixels. The lines answer the question the player is actually asking -
+    /// "is this above that one" - by drawing the relationship rather than leaving it to be judged by
+    /// eye against a perspective view.
+    ///
+    /// Four of them, from the corners. Every connecting cell of a large piece would be a cage, and
+    /// the corners are what a shape is lined up by.
+    /// </summary>
+    public sealed class AlignmentGuides : MonoBehaviour
+    {
+        public Material guideMaterial;
+
+        [Tooltip("Thickness of the lines, in world units. A stud is 0.095 across.")]
+        public float thickness = 0.004f;
+
+        [Tooltip("How many corners to draw from.")]
+        public int maxLines = 4;
+
+        [SerializeField] Color downColour = new Color(0.45f, 0.9f, 1f, 0.4f);
+        [SerializeField] Color upColour = new Color(1f, 0.8f, 0.35f, 0.3f);
+
+        readonly List<GameObject> _pieces = new();
+        int _used;
+
+        /// <summary>
+        /// Draws the guides for a placement. Called every frame the ghost is up, so it reuses the
+        /// same objects rather than making new ones.
+        /// </summary>
+        public void Show(GridMap map, PlacedPart part)
+        {
+            _used = 0;
+
+            if (part?.Definition == null || guideMaterial == null)
+            {
+                Hide();
+                return;
+            }
+
+            foreach (Vector2Int cell in Anchors(part, maxLines))
+            {
+                // The column's own underside and top, not the part's. On a stepped piece the two
+                // ends sit at different heights, and a line drawn from the part's base would start
+                // inside the geometry at the raised end.
+                int baseLayer = part.UndersideLayerAt(cell.x, cell.y);
+                int topLayer = part.TopLayerAt(cell.x, cell.y);
+
+                // Downward: to the top of whatever is below, or to the ground.
+                Vector2Int outward = Outward(part, cell);
+
+                int floor = Below(map, part, cell, baseLayer);
+                if (floor < baseLayer)
+                {
+                    Draw(cell, outward, floor, baseLayer, downColour);
+                    Mark(cell, floor, downColour);
+                }
+
+                // Upward: only when something is actually over it. A line into empty sky says
+                // nothing, and four of them would be clutter over every piece placed in the open.
+                int ceiling = Above(map, part, cell, topLayer);
+                if (ceiling > topLayer)
+                {
+                    Draw(cell, outward, topLayer, ceiling, upColour);
+                    Mark(cell, ceiling, upColour);
+                }
+            }
+
+            for (int i = _used; i < _pieces.Count; i++)
+                _pieces[i].SetActive(false);
+        }
+
+        [Tooltip("Total lines drawn for a selection, however many pieces are in it.")]
+        public int maxSelectionLines = 8;
+
+        /// <summary>
+        /// Guides for a selection rather than for a piece about to be placed.
+        ///
+        /// Track first, and the columns under it: what a player checks before moving a run is what it
+        /// is standing on, and a selection of a dozen bricks drawing from every corner would be a
+        /// thicket. Two lines per piece, track before brick, until the budget runs out.
+        /// </summary>
+        public void Show(GridMap map, IReadOnlyCollection<PlacedPart> selection)
+        {
+            _used = 0;
+
+            if (selection == null || selection.Count == 0 || guideMaterial == null)
+            {
+                Hide();
+                return;
+            }
+
+            var ordered = new List<PlacedPart>(selection);
+            ordered.Sort((a, b) => (b.HasPorts ? 1 : 0).CompareTo(a.HasPorts ? 1 : 0));
+
+            int drawn = 0;
+
+            foreach (PlacedPart part in ordered)
+            {
+                if (drawn >= maxSelectionLines)
+                    break;
+
+                foreach (Vector2Int cell in Anchors(part, 2))
+                {
+                    if (drawn >= maxSelectionLines)
+                        break;
+
+                    int baseLayer = part.UndersideLayerAt(cell.x, cell.y);
+                    int floor = Below(map, part, cell, baseLayer);
+
+                    // Only downward here. What holds a selection up is the question; what is above it
+                    // is usually the selection itself.
+                    if (floor >= baseLayer)
+                        continue;
+
+                    Draw(cell, Outward(part, cell), floor, baseLayer, downColour);
+                    Mark(cell, floor, downColour);
+                    drawn++;
+                }
+            }
+
+            for (int i = _used; i < _pieces.Count; i++)
+                _pieces[i].SetActive(false);
+        }
+
+        public void Hide()
+        {
+            foreach (GameObject piece in _pieces)
+                piece.SetActive(false);
+
+            _used = 0;
+        }
+
+        /// <summary>
+        /// Which corner of the cell to draw on: the one facing away from the piece.
+        ///
+        /// Four lines all on the same corner of their cells would sit inside the piece on two sides.
+        /// Taken outward, they frame it.
+        /// </summary>
+        static Vector2Int Outward(PlacedPart part, Vector2Int cell)
+        {
+            int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+
+            foreach (GridCoord occupied in part.OccupiedCells())
+            {
+                minX = Mathf.Min(minX, occupied.x);
+                minY = Mathf.Min(minY, occupied.y);
+                maxX = Mathf.Max(maxX, occupied.x);
+                maxY = Mathf.Max(maxY, occupied.y);
+            }
+
+            float midX = (minX + maxX) * 0.5f;
+            float midY = (minY + maxY) * 0.5f;
+
+            return new Vector2Int(cell.x >= midX ? 1 : 0, cell.y >= midY ? 1 : 0);
+        }
+
+        /// <summary>Layer of the surface below this column, or the piece's own base if nothing is there.</summary>
+        static int Below(GridMap map, PlacedPart part, Vector2Int cell, int baseLayer)
+        {
+            for (int layer = baseLayer - 1; layer >= 0; layer--)
+            {
+                PlacedPart occupant = map.At(new GridCoord(cell.x, cell.y, layer));
+
+                if (occupant != null && occupant != part)
+                    return occupant.TopLayerAt(cell.x, cell.y);
+            }
+
+            return 0;
+        }
+
+        /// <summary>Layer of the underside above this column, or the piece's own top if nothing is there.</summary>
+        static int Above(GridMap map, PlacedPart part, Vector2Int cell, int topLayer)
+        {
+            for (int layer = topLayer; layer <= topLayer + 64; layer++)
+            {
+                PlacedPart occupant = map.At(new GridCoord(cell.x, cell.y, layer));
+
+                if (occupant != null && occupant != part)
+                    return layer;
+            }
+
+            return topLayer;
+        }
+
+        /// <summary>
+        /// Which columns to draw from: the corners of the cells that actually connect.
+        ///
+        /// Studs first. On a funnel the connecting cells are scattered pads under a round bowl, and
+        /// the two that matter are the shelf it offers - which are the ones carrying studs.
+        /// </summary>
+        static List<Vector2Int> Anchors(PlacedPart part, int max)
+        {
+            var studded = new List<Vector2Int>();
+            var socketed = new List<Vector2Int>();
+            var plain = new List<Vector2Int>();
+
+            var seen = new HashSet<Vector2Int>();
+
+            foreach (GridCoord cell in part.OccupiedCells())
+            {
+                var column = new Vector2Int(cell.x, cell.y);
+                if (!seen.Add(column))
+                    continue;
+
+                if (part.HasTopStudAt(column.x, column.y)) studded.Add(column);
+                else if (part.HasBottomSocketAt(column.x, column.y)) socketed.Add(column);
+                else plain.Add(column);
+            }
+
+            // Studs first, because a part that offers them is placed by them - a funnel is caught by
+            // its shelf and nothing else about it matters for lining up.
+            //
+            // Everything else is lined up by its outline. Choosing socket cells here was wrong for a
+            // slide curve, whose antistuds run along one edge only, so all four lines ended up at one
+            // mouth and told the player nothing about the other three corners of the piece.
+            var all = new List<Vector2Int>(studded);
+            all.AddRange(socketed);
+            all.AddRange(plain);
+
+            List<Vector2Int> pool = studded.Count > 0 ? studded
+                : socketed.Count > 0 ? socketed
+                : all;
+
+            if (pool.Count <= max)
+                return pool;
+
+            // The four furthest apart, taken as the extremes of the pool's own bounds. A shape is
+            // lined up by its corners, and picking the first four in scan order would put them all
+            // along one edge.
+            int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+
+            foreach (Vector2Int column in pool)
+            {
+                minX = Mathf.Min(minX, column.x);
+                minY = Mathf.Min(minY, column.y);
+                maxX = Mathf.Max(maxX, column.x);
+                maxY = Mathf.Max(maxY, column.y);
+            }
+
+            var corners = new[]
+            {
+                new Vector2Int(minX, minY), new Vector2Int(maxX, minY),
+                new Vector2Int(minX, maxY), new Vector2Int(maxX, maxY),
+            };
+
+            var chosen = new List<Vector2Int>(max);
+
+            foreach (Vector2Int corner in corners)
+            {
+                Vector2Int best = pool[0];
+                int nearest = int.MaxValue;
+
+                foreach (Vector2Int column in pool)
+                {
+                    int distance = Mathf.Abs(column.x - corner.x) + Mathf.Abs(column.y - corner.y);
+
+                    if (distance < nearest && !chosen.Contains(column))
+                    {
+                        nearest = distance;
+                        best = column;
+                    }
+                }
+
+                if (!chosen.Contains(best))
+                    chosen.Add(best);
+
+                if (chosen.Count == max)
+                    break;
+            }
+
+            return chosen;
+        }
+
+        void Draw(Vector2Int cell, Vector2Int outward, int fromLayer, int toLayer, Color colour)
+        {
+            GameObject line = Take();
+
+            float bottom = fromLayer * GridCoord.LayerUnits;
+            float top = toLayer * GridCoord.LayerUnits;
+
+            // On the grid corner of the cell, not through the middle of the stud. A line down the
+            // centre is hidden by the stud it is describing and by the piece above it; on the corner
+            // it runs in clear air beside both, and lines up with the grid it is measuring against.
+            var corner = new Vector3(
+                (cell.x + (outward.x > 0 ? 1f : 0f)) * GridCoord.StudUnits,
+                (bottom + top) * 0.5f,
+                (cell.y + (outward.y > 0 ? 1f : 0f)) * GridCoord.StudUnits);
+
+            Vector3 centre = corner;
+
+            line.transform.SetPositionAndRotation(centre, Quaternion.identity);
+            line.transform.localScale = new Vector3(thickness, Mathf.Max(0.001f, top - bottom), thickness);
+
+            var renderer = line.GetComponent<MeshRenderer>();
+            renderer.GetPropertyBlock(_block);
+            _block.SetColor(BaseColor, colour);
+            renderer.SetPropertyBlock(_block);
+
+            line.SetActive(true);
+        }
+
+        /// <summary>
+        /// A flat ring of a marker on the stud a line lands on.
+        ///
+        /// The line says which column; this says which stud, which is the thing being aimed at. Sized
+        /// to a stud rather than a cell so it reads as picking one out rather than filling the square.
+        /// </summary>
+        void Mark(Vector2Int cell, int layer, Color colour)
+        {
+            GameObject marker = Take();
+
+            var centre = new Vector3(
+                (cell.x + 0.5f) * GridCoord.StudUnits,
+                layer * GridCoord.LayerUnits,
+                (cell.y + 0.5f) * GridCoord.StudUnits);
+
+            marker.transform.SetPositionAndRotation(centre, Quaternion.identity);
+
+            // A stud is 9.5 mm across; a touch wider so it rings the stud rather than hiding it.
+            marker.transform.localScale = new Vector3(0.11f, thickness, 0.11f);
+
+            var renderer = marker.GetComponent<MeshRenderer>();
+            renderer.GetPropertyBlock(_block);
+            _block.SetColor(BaseColor, colour);
+            renderer.SetPropertyBlock(_block);
+
+            marker.SetActive(true);
+        }
+
+        static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
+        MaterialPropertyBlock _block;
+
+        GameObject Take()
+        {
+            _block ??= new MaterialPropertyBlock();
+
+            if (_used < _pieces.Count)
+                return _pieces[_used++];
+
+            GameObject line = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            line.name = "Guide";
+            line.transform.SetParent(transform, false);
+
+            Destroy(line.GetComponent<Collider>());
+
+            var renderer = line.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = guideMaterial;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            _pieces.Add(line);
+            _used++;
+
+            return line;
+        }
+    }
+}

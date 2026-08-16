@@ -110,11 +110,20 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             var ghost = systems.AddComponent<GhostPreview>();
             ghost.ghostMaterial = ghostMaterial;
 
+            Material guideMaterial = EnsureMaterial("Guide", "Universal Render Pipeline/Unlit", opaque: false);
+            guideMaterial.SetColor("_BaseColor", new Color(0.45f, 0.9f, 1f, 0.85f));
+            guideMaterial.enableInstancing = true;
+
+            var guides = systems.AddComponent<AlignmentGuides>();
+            guides.guideMaterial = guideMaterial;
+            guides.thickness = 0.004f;
+
             var controller = systems.AddComponent<BuildController>();
             controller.factory = factory;
             controller.raycaster = raycaster;
             controller.orbitCamera = orbit;
             controller.ghost = ghost;
+            controller.guides = guides;
             controller.partRoot = partRoot;
             controller.highlightMaterial = highlightMaterial;
 
@@ -256,9 +265,13 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
 
             material.shader = shader;
 
-            if (shaderName.Contains("Lit"))
+            bool unlit = shaderName.Contains("Unlit");
+
+            if (shaderName.Contains("Lit") || unlit)
             {
-                material.SetFloat("_Smoothness", 0.35f);
+                if (!unlit)
+                    material.SetFloat("_Smoothness", 0.35f);
+
                 material.enableInstancing = true;
 
                 if (!opaque)

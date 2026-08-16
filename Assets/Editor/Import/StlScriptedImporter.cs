@@ -17,7 +17,7 @@ namespace BlockMarbleRun.EditorTools.Import
     public sealed class StlScriptedImporter : ScriptedImporter
     {
         /// <summary>Bump to force Unity to re-run the importer over every .stl after a logic change.</summary>
-        const int Version = 15;
+        const int Version = 18;
 
         /// <summary>
         /// Source STLs are in millimetres. 0.01 puts the project at 1 unit = 10 cm, which keeps a

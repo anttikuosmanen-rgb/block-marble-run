@@ -84,6 +84,24 @@ namespace BlockMarbleRun.Grid
             return Origin.layer;
         }
 
+        /// <summary>
+        /// The layer this part's underside sits at in one column, which on a stepped part is not its
+        /// base. A slide curve carries antistuds on the floor at one end and a brick up at the other.
+        /// </summary>
+        public int UndersideLayerAt(int worldX, int worldY)
+        {
+            if (!LocalCell(worldX, worldY, out Vector2Int local))
+                return Origin.layer;
+
+            int layers = Mathf.Max(1, Definition.heightLayers);
+
+            for (int layer = 0; layer < layers; layer++)
+                if (Definition.OccupiesCell(local.x, local.y, layer))
+                    return Origin.layer + layer;
+
+            return Origin.layer;
+        }
+
         /// <summary>The part's own cell under a world column, or false when the column is not its.</summary>
         bool LocalCell(int worldX, int worldY, out Vector2Int local)
         {

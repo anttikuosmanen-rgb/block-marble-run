@@ -62,6 +62,7 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestALiftedScaffoldBrickBecomesAPillar();
             TestATallGapIsFilledByOnePillar();
             TestLevelsOfferedOverABuild();
+            TestARaisedUndersideCanMeetAStud();
             TestPlatesAreHalfABrick();
             TestStackingOnAStepAboveTheGround();
             TestScaffoldingLeavesRoomForTheDescendingPiece();
@@ -1579,6 +1580,72 @@ namespace BlockMarbleRun.EditorTools.Tests
                 Check($"level {level} is placeable",
                     map.CanPlace(candidate) != PlacementResult.Blocked);
             }
+        }
+
+        /// <summary>
+        /// A stepped part can be carried by the studs under its raised end.
+        ///
+        /// A slide curve has antistuds on the floor at one end and a whole brick up at the other. Both
+        /// are real connections, but support was asked only about the part's base layer, so the raised
+        /// pair could never meet a stud however exactly it was lined up over one - and the placement
+        /// where it does was not even offered, since resting only ever answers about the lowest point.
+        /// </summary>
+        static void TestARaisedUndersideCanMeetAStud()
+        {
+            PartDefinition curve = FindDefinition("slide_curve_4x4");
+            PartDefinition brick = FindDefinition("building_block_2x2");
+
+            if (curve == null || brick == null)
+            {
+                Check("curve and brick exist", false);
+                return;
+            }
+
+            // The column whose underside is highest - the raised mouth.
+            var probe = new PlacedPart(curve, new GridCoord(0, 0, 0), 0, 0);
+
+            var raised = new Vector2Int(-1, -1);
+            int highest = 0;
+
+            foreach (GridCoord cell in probe.OccupiedCells())
+            {
+                int underside = probe.UndersideLayerAt(cell.x, cell.y);
+
+                if (underside > highest && probe.HasBottomSocketAt(cell.x, cell.y))
+                {
+                    highest = underside;
+                    raised = new Vector2Int(cell.x, cell.y);
+                }
+            }
+
+            Check("the curve has an antistud above its base", highest > 0,
+                $"highest socketed underside at {highest}");
+
+            if (highest == 0)
+                return;
+
+            // A brick standing where that raised underside would come down on it.
+            var map = new GridMap();
+            var tower = new PlacedPart(brick, new GridCoord(raised.x, raised.y, 0), 0, 0);
+            map.Add(tower);
+
+            int studTop = tower.TopLayerAt(raised.x, raised.y);
+            var placed = new PlacedPart(curve, new GridCoord(0, 0, studTop - highest), 0, 0);
+
+            Check("the curve fits over it", map.CanPlace(placed) != PlacementResult.Blocked);
+            Check("and its raised end is carried by the studs", map.IsSupported(placed),
+                $"curve at {placed.Origin.layer}, studs top out at {studTop}");
+
+            // And the solver offers that placement rather than only the resting one.
+            List<PlacedPart> ranked = PlacementSolver.SolveRanked(map, curve, 0, 0, 0, 0);
+
+            bool offered = false;
+            foreach (PlacedPart candidate in ranked)
+                if (candidate.Origin.layer == placed.Origin.layer)
+                    offered = true;
+
+            Check("the solver offers it", offered,
+                $"{ranked.Count} placements, none at layer {placed.Origin.layer}");
         }
     }
 }

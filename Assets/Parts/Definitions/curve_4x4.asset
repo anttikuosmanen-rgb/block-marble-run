@@ -26,7 +26,7 @@ MonoBehaviour:
   pivotOffsetUnits: {x: 0.000000003799796, y: 0.000000003799796}
   hasTunnel: 1
   topStuds: 00000000000000000000000000000000
-  bottomSockets: 01010100000000000000000100000001
+  bottomSockets: 01010000000000000000000100000001
   rotation: 0
   ports:
   - midlineHalfStuds: {x: 8, y: 6}

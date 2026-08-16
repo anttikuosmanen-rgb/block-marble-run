@@ -291,6 +291,7 @@ namespace BlockMarbleRun.Grid
 
                 var layers = new HashSet<int> { restLayer };
                 CollectPortLayers(map, def, x, y, candidateRotation, colorIndex, layers);
+                CollectStudLayers(map, def, x, y, candidateRotation, colorIndex, layers);
 
                 foreach (int layer in layers)
                 {
@@ -385,6 +386,43 @@ namespace BlockMarbleRun.Grid
 
             levels.Sort();
             return levels;
+        }
+
+        /// <summary>
+        /// Layers where one of the part's undersides would land on a stud.
+        ///
+        /// Resting alone answers with the top of whatever is under the part's lowest point, which is
+        /// the only placement a flat-bottomed piece has. A stepped one has more: a slide curve can be
+        /// stood on a tower that meets its raised end while its low end hangs out over nothing, and
+        /// that placement is unreachable by resting.
+        /// </summary>
+        static void CollectStudLayers(GridMap map, PartDefinition def, int anchorX, int anchorY,
+                                      int rotation, byte colorIndex, HashSet<int> layers)
+        {
+            var probe = new PlacedPart(def, new GridCoord(anchorX, anchorY, 0), rotation, colorIndex);
+            var asked = new HashSet<Vector2Int>();
+
+            foreach (GridCoord cell in probe.OccupiedCells())
+            {
+                var column = new Vector2Int(cell.x, cell.y);
+                if (!asked.Add(column))
+                    continue;
+
+                // How far this column's underside sits above the part's own origin.
+                int offset = probe.UndersideLayerAt(column.x, column.y);
+
+                foreach (PlacedPart other in map.PartsInColumn(column.x, column.y))
+                {
+                    if (!other.HasTopStudAt(column.x, column.y))
+                        continue;
+
+                    int studTop = other.TopLayerAt(column.x, column.y);
+                    int origin = studTop - offset;
+
+                    if (origin >= 0)
+                        layers.Add(origin);
+                }
+            }
         }
 
         public static int RestLayerFor(GridMap map, PartDefinition def, int anchorX, int anchorY,
