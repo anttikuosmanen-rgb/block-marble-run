@@ -312,33 +312,78 @@ namespace BlockMarbleRun.EditorTools.Import
         {
             int cells = FootprintSize.x * FootprintSize.y;
             TopStuds = new bool[cells];
+            HasTopStuds = false;
 
-            var highest = new float[cells];
+            int w = Mathf.CeilToInt(SizeMm.x / HeightMapRes) + 1;
+            int h = Mathf.CeilToInt(SizeMm.y / HeightMapRes) + 1;
+
+            if (w <= 0 || h <= 0)
+                return;
+
+            // Rasterised exactly, not by bounding box. The map used for channel mouths deliberately
+            // over-covers - only the minimum along an edge is read there, and over-covering can only
+            // raise a cell into being a wall, never lower it into a false mouth. Here the maximum is
+            // what matters, and over-covering smears a funnel's 28.4 mm rim into the neighbouring
+            // shelf, whose studs then look like part of the rim and vanish.
+            float[] height = BuildExactHeightMap(facets, w, h);
+
+            // Samples grouped by cell, so each can be asked about its own shape rather than just its
+            // highest point.
+            var samples = new List<float>[cells];
             for (int i = 0; i < cells; i++)
-                highest[i] = float.NegativeInfinity;
+                samples[i] = new List<float>();
 
-            foreach (StlFacet f in facets)
+            for (int j = 0; j < h; j++)
+            for (int i = 0; i < w; i++)
             {
-                Raise(highest, f.A);
-                Raise(highest, f.B);
-                Raise(highest, f.C);
-            }
-
-            bool any = false;
-
-            for (int i = 0; i < cells; i++)
-            {
-                if (float.IsNegativeInfinity(highest[i]))
+                float z = height[j * w + i];
+                if (float.IsNegativeInfinity(z))
                     continue;
 
-                if (!IsStudTop(highest[i]))
-                    continue;
+                float x = MinMm.x + i * HeightMapRes;
+                float y = MinMm.y + j * HeightMapRes;
 
-                TopStuds[i] = true;
-                any = true;
+                int cx = Mathf.Clamp(Mathf.FloorToInt((x - MinMm.x) / StudPitchMm), 0, FootprintSize.x - 1);
+                int cy = Mathf.Clamp(Mathf.FloorToInt((y - MinMm.y) / StudPitchMm), 0, FootprintSize.y - 1);
+
+                samples[cy * FootprintSize.x + cx].Add(z);
             }
 
-            HasTopStuds = any;
+            for (int cell = 0; cell < cells; cell++)
+            {
+                List<float> column = samples[cell];
+                if (column.Count == 0)
+                    continue;
+
+                float top = float.NegativeInfinity;
+                foreach (float z in column)
+                    top = Mathf.Max(top, z);
+
+                if (!IsStudTop(top))
+                    continue;
+
+                // A stud is a flat disc standing on a flat surface, so the cell has two plateaus: the
+                // stud's own top, and the part's surface 4.6 mm below it. A bowl sloping past those
+                // heights has neither, and reading only the highest point put studs in a ring around
+                // every large funnel - the slope simply passes through the height a stud would be at.
+                const float flat = 0.4f;
+
+                int atTop = 0, atBody = 0;
+
+                foreach (float z in column)
+                {
+                    if (Mathf.Abs(z - top) <= flat) atTop++;
+                    else if (Mathf.Abs(z - (top - StudHeightMm)) <= flat) atBody++;
+                }
+
+                // A 9.5 mm stud covers about a quarter of a 16 mm cell, and the surface around it the
+                // rest. Held well under both so a stud at the edge of a part still counts.
+                if (atTop < column.Count * 0.10f || atBody < column.Count * 0.15f)
+                    continue;
+
+                TopStuds[cell] = true;
+                HasTopStuds = true;
+            }
         }
 
         /// <summary>
@@ -491,6 +536,78 @@ namespace BlockMarbleRun.EditorTools.Import
             for (int cell = 0; cell < cells; cell++)
                 BottomSockets[cell] = covered[cell] > 0 &&
                                       touching[cell] >= covered[cell] * requiredShare;
+        }
+
+        /// <summary>
+        /// Top surface height, sampling only the points a triangle actually covers.
+        ///
+        /// The same map as <see cref="BuildHeightMap"/> but with a point-in-triangle test instead of
+        /// a bounding-box fill, for the readings where covering too much is the failure rather than
+        /// the safe direction.
+        /// </summary>
+        float[] BuildExactHeightMap(List<StlFacet> facets, int w, int h)
+        {
+            var height = new float[w * h];
+            for (int i = 0; i < height.Length; i++)
+                height[i] = float.NegativeInfinity;
+
+            foreach (StlFacet f in facets)
+            {
+                float minX = Mathf.Min(f.A.x, Mathf.Min(f.B.x, f.C.x));
+                float maxX = Mathf.Max(f.A.x, Mathf.Max(f.B.x, f.C.x));
+                float minY = Mathf.Min(f.A.y, Mathf.Min(f.B.y, f.C.y));
+                float maxY = Mathf.Max(f.A.y, Mathf.Max(f.B.y, f.C.y));
+
+                int i0 = Mathf.Clamp(Mathf.FloorToInt((minX - MinMm.x) / HeightMapRes), 0, w - 1);
+                int i1 = Mathf.Clamp(Mathf.CeilToInt((maxX - MinMm.x) / HeightMapRes), 0, w - 1);
+                int j0 = Mathf.Clamp(Mathf.FloorToInt((minY - MinMm.y) / HeightMapRes), 0, h - 1);
+                int j1 = Mathf.Clamp(Mathf.CeilToInt((maxY - MinMm.y) / HeightMapRes), 0, h - 1);
+
+                for (int i = i0; i <= i1; i++)
+                for (int j = j0; j <= j1; j++)
+                {
+                    float x = MinMm.x + i * HeightMapRes;
+                    float y = MinMm.y + j * HeightMapRes;
+
+                    if (!Covers(f, x, y, out float z))
+                        continue;
+
+                    int index = j * w + i;
+                    if (z > height[index])
+                        height[index] = z;
+                }
+            }
+
+            return height;
+        }
+
+        /// <summary>
+        /// Whether a facet covers a point seen from above, and the height of it there.
+        ///
+        /// Barycentric, with the surface interpolated rather than taken from the highest corner: a
+        /// large sloping triangle read at its peak everywhere would flatten a bowl into a plateau,
+        /// which is exactly the shape this is meant to tell apart from a stud.
+        /// </summary>
+        static bool Covers(StlFacet f, float x, float y, out float z)
+        {
+            z = 0f;
+
+            float x1 = f.A.x, y1 = f.A.y, x2 = f.B.x, y2 = f.B.y, x3 = f.C.x, y3 = f.C.y;
+            float area = (y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3);
+
+            if (Mathf.Abs(area) < 1e-9f)
+                return false;   // edge-on from above, so it covers nothing
+
+            float a = ((y2 - y3) * (x - x3) + (x3 - x2) * (y - y3)) / area;
+            float b = ((y3 - y1) * (x - x3) + (x1 - x3) * (y - y3)) / area;
+            float c = 1f - a - b;
+
+            const float slack = 1e-4f;
+            if (a < -slack || b < -slack || c < -slack)
+                return false;
+
+            z = a * f.A.z + b * f.B.z + c * f.C.z;
+            return true;
         }
 
         float[] BuildHeightMap(List<StlFacet> facets, int w, int h)

@@ -63,8 +63,16 @@ namespace BlockMarbleRun.World
                 Vector3 inside = partHit.point - partHit.normal * (GridCoord.StudUnits * 0.25f);
                 GridCoord cell = GridCoord.FromWorld(inside);
 
-                // Placing on a top face stacks; placing on a side face extends sideways.
-                hit.Cell = partHit.normal.y > 0.5f
+                // A top face stacks. So does a side face, when the part offers studs in that column:
+                // a pillar is fourteen layers of side and a couple of studs, so aiming at the studs
+                // themselves means hitting a target a few pixels across, and everything else put the
+                // piece on the floor beside it.
+                //
+                // A side face only extends sideways where nothing can be stacked anyway - the side of
+                // a length of track, where there are no studs to catch.
+                bool stacks = partHit.normal.y > 0.5f || HasStudAt(partHit.collider, cell);
+
+                hit.Cell = stacks
                     ? new GridCoord(cell.x, cell.y, LayerAbove(partHit.collider, cell))
                     : new GridCoord(
                         cell.x + Mathf.RoundToInt(partHit.normal.x),
@@ -115,6 +123,34 @@ namespace BlockMarbleRun.World
             return true;
         }
 
+        /// <summary>
+        /// Cell under the cursor on a horizontal plane at a given height, ignoring all geometry.
+        ///
+        /// For sliding a held placement. Reading the cursor off whatever the ray happens to strike
+        /// works while it strikes the build, and jumps the moment it misses: a few pixels past the
+        /// edge of a pillar the ray carries on to the floor behind it, and the piece leaps across the
+        /// world. A plane at the piece's own height has no edges to fall off.
+        /// </summary>
+        public bool RaycastLevel(Vector2 screenPosition, float worldY, out GridCoord cell)
+        {
+            cell = default;
+            if (buildCamera == null)
+                return false;
+
+            var plane = new Plane(Vector3.up, new Vector3(0f, worldY, 0f));
+            Ray ray = buildCamera.ScreenPointToRay(screenPosition);
+
+            if (!plane.Raycast(ray, out float distance) || distance > maxDistance)
+                return false;
+
+            Vector3 point = ray.GetPoint(distance);
+
+            // The plane sits at the piece's base, so nudge up into the layer it occupies before
+            // converting - a point exactly on a boundary belongs to the layer below it.
+            cell = GridCoord.FromWorld(point + Vector3.up * (GridCoord.LayerUnits * 0.5f));
+            return true;
+        }
+
         /// <summary>Cell for picking an existing part - the cell actually hit, not the one above it.</summary>
         public BuildHit RaycastPick(Vector2 screenPosition)
         {
@@ -137,6 +173,13 @@ namespace BlockMarbleRun.World
         /// The layer above the part that was hit. Uses the part's own top rather than the hit cell,
         /// so clicking the top of a two-layer slide stacks above the whole part instead of halfway up.
         /// </summary>
+        /// <summary>Whether the part hit offers a stud in the column that was hit.</summary>
+        static bool HasStudAt(Collider collider, GridCoord hitCell)
+        {
+            var marker = collider.GetComponentInParent<PlacedPartMarker>();
+            return marker != null && marker.Part.HasTopStudAt(hitCell.x, hitCell.y);
+        }
+
         static int LayerAbove(Collider collider, GridCoord hitCell)
         {
             var marker = collider.GetComponentInParent<PlacedPartMarker>();

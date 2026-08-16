@@ -374,10 +374,37 @@ namespace BlockMarbleRun.Build
             }
 
             // And the bricks that were doing the holding are now hanging too.
-            foreach (PlacedPart support in ScaffoldBuilder.ExtendLiftedColumns(_map, parts, _pillar))
+            var lengthened = new List<(PlacedPart Old, PlacedPart New)>();
+
+            foreach (PlacedPart support in ScaffoldBuilder.ExtendLiftedColumns(_map, parts, _pillar, lengthened))
             {
                 support.Instance = _spawn(support);
                 _supports.Add(support);
+            }
+
+            SwapLengthened(parts, lengthened);
+        }
+
+        /// <summary>
+        /// Puts re-cut pillars in place of the ones they replace.
+        ///
+        /// The list the caller holds is what undo walks, so the replacement has to take the old
+        /// one's seat in it - otherwise undo removes a pillar that is no longer there and leaves the
+        /// longer one standing.
+        /// </summary>
+        void SwapLengthened(List<PlacedPart> parts, List<(PlacedPart Old, PlacedPart New)> lengthened)
+        {
+            foreach ((PlacedPart old, PlacedPart taller) in lengthened)
+            {
+                if (old.Instance != null)
+                    Object.Destroy(old.Instance);
+
+                old.Instance = null;
+                taller.Instance = _spawn(taller);
+
+                int seat = parts.IndexOf(old);
+                if (seat >= 0)
+                    parts[seat] = taller;
             }
         }
     }
@@ -440,10 +467,27 @@ namespace BlockMarbleRun.Build
             // left - which, pasted anywhere higher, leaves them hanging. Only new pillars were being
             // built, so the copy stood on fresh supports beside a column of its own that reached
             // nothing.
-            foreach (PlacedPart support in ScaffoldBuilder.ExtendLiftedColumns(_map, _parts, _pillar))
+            var lengthened = new List<(PlacedPart Old, PlacedPart New)>();
+
+            foreach (PlacedPart support in ScaffoldBuilder.ExtendLiftedColumns(_map, _parts, _pillar, lengthened))
             {
                 support.Instance = _spawn(support);
                 _supports.Add(support);
+            }
+
+            // A pillar that came along in the copy is re-cut to reach the ground rather than stood on
+            // a tower of bricks. It takes the old one's place in the list undo walks.
+            foreach ((PlacedPart old, PlacedPart taller) in lengthened)
+            {
+                if (old.Instance != null)
+                    Object.Destroy(old.Instance);
+
+                old.Instance = null;
+                taller.Instance = _spawn(taller);
+
+                int seat = _parts.IndexOf(old);
+                if (seat >= 0)
+                    _parts[seat] = taller;
             }
 
             return true;

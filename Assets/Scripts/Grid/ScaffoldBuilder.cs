@@ -76,32 +76,6 @@ namespace BlockMarbleRun.Grid
                     continue;
                 }
 
-                // One pillar for the whole column where the height allows it. Ten stacked bricks and
-                // one ten-layer pillar hold the same weight, but the pillar is a single part, a
-                // single collider and a single line in the save file - and has no seams down it for
-                // a marble that wanders off the track to catch on.
-                PartDefinition tall = ProceduralPillars.Active?.ForLayers(topLayer - from);
-
-                if (tall != null)
-                {
-                    var column = new PlacedPart(tall, new GridCoord(anchor.x, anchor.y, from), 0, ScaffoldColour);
-
-                    if (!Intersects(column, partCells) && map.CanPlace(column) != PlacementResult.Blocked)
-                    {
-                        map.Add(column);
-                        supports.Add(column);
-
-                        if (Verbose)
-                            Report = Report.TrimEnd() +
-                                     $"\n  ({anchor.x},{anchor.y}) {why}: top {topLayer} from {from} - " +
-                                     $"1 pillar of {topLayer - from}";
-
-                        continue;
-                    }
-                }
-
-                // Bricks otherwise, and a plate for an odd last layer. A pillar only helps where its
-                // whole height fits and nothing is in the way.
                 int built = FillColumn(map, anchor, from, topLayer, pillar, partCells, supports,
                                        out string stoppedBy);
 
@@ -136,7 +110,8 @@ namespace BlockMarbleRun.Grid
         /// grown back down to meet whatever is beneath.
         /// </summary>
         public static List<PlacedPart> ExtendLiftedColumns(GridMap map, List<PlacedPart> moved,
-                                                           PartDefinition pillar)
+                                                           PartDefinition pillar,
+                                                           List<(PlacedPart Old, PlacedPart New)> lengthened = null)
         {
             var added = new List<PlacedPart>();
             if (pillar == null)
@@ -147,6 +122,15 @@ namespace BlockMarbleRun.Grid
                 // Channel pieces are propped by the usual rules; this is about the bricks holding them.
                 if (part.HasPorts || part.Origin.layer <= 0 || map.IsSupported(part))
                     continue;
+
+                // A pillar that has been lifted is made longer rather than stood on a tower of bricks.
+                // It is one part cut to a height; the height it needs has simply changed. Stacking
+                // under it works structurally and looks like scaffolding holding up scaffolding.
+                if (lengthened != null && Lengthen(map, part, out PlacedPart taller))
+                {
+                    lengthened.Add((part, taller));
+                    continue;
+                }
 
                 // Every pillar-sized patch of the part's base, not just its origin corner. A long
                 // brick lifted off its supports needs its whole underside carried, and filling only
@@ -212,23 +196,45 @@ namespace BlockMarbleRun.Grid
             {
                 int remaining = topLayer - layer;
 
-                PartDefinition piece =
-                    brick != null && brick.heightLayers <= remaining ? brick :
-                    Plate != null && Plate.heightLayers <= remaining ? Plate : null;
+                // Tallest first: one pillar cut to the whole remaining height, else a brick, else a
+                // plate for an odd last layer. A pillar is one part, one collider and one line in a
+                // save file where a stack of bricks is many, and has no seams down it for a marble
+                // that wanders off the track.
+                PlacedPart support = null;
+                bool inPart = false;
 
-                if (piece == null)
+                foreach (PartDefinition piece in new[]
+                         {
+                             ProceduralPillars.Active?.ForLayers(remaining),
+                             brick,
+                             Plate,
+                         })
                 {
-                    stoppedBy = $"nothing fits the last {remaining} layer(s)";
+                    if (piece == null || piece.heightLayers > remaining)
+                        continue;
+
+                    var candidate = new PlacedPart(piece, new GridCoord(anchor.x, anchor.y, layer),
+                        0, ScaffoldColour);
+
+                    if (Intersects(candidate, partCells))
+                    {
+                        inPart = true;
+                        continue;
+                    }
+
+                    if (map.CanPlace(candidate) == PlacementResult.Blocked)
+                        continue;
+
+                    support = candidate;
                     break;
                 }
 
-                var support = new PlacedPart(piece, new GridCoord(anchor.x, anchor.y, layer), 0, ScaffoldColour);
-
-                bool inPart = Intersects(support, partCells);
-
-                if (inPart || map.CanPlace(support) == PlacementResult.Blocked)
+                if (support == null)
                 {
-                    stoppedBy = $"stopped at {layer} by {(inPart ? "the part" : "the build")}";
+                    stoppedBy = inPart
+                        ? $"stopped at {layer} by the part"
+                        : $"nothing fits the last {remaining} layer(s)";
+
                     break;
                 }
 
@@ -236,7 +242,7 @@ namespace BlockMarbleRun.Grid
                 supports.Add(support);
 
                 built++;
-                layer += Mathf.Max(1, piece.heightLayers);
+                layer += Mathf.Max(1, support.Definition.heightLayers);
             }
 
             return built;
@@ -442,6 +448,78 @@ namespace BlockMarbleRun.Grid
             }
 
             return anyUnder;
+        }
+
+        /// <summary>
+        /// Re-cuts a lifted pillar to reach whatever is now beneath it.
+        ///
+        /// False when the part is not a pillar, when nothing needs adding, or when no pillar of the
+        /// required height can be made - in which case the caller falls back to filling the gap with
+        /// bricks, which is right for a brick and merely ugly for a pillar.
+        /// </summary>
+        static bool Lengthen(GridMap map, PlacedPart part, out PlacedPart taller)
+        {
+            taller = null;
+
+            ProceduralPillars pillars = ProceduralPillars.Active;
+            if (pillars == null)
+                return false;
+
+            // Pillars, and the bricks the scaffolder placed before there were pillars to place. A
+            // brick the player put there is their own structure and is left exactly as they built it,
+            // which is why this asks about the scaffold colour rather than just the shape.
+            bool ours = pillars.IsPillar(part.Definition) || part.ColorIndex == ScaffoldColour;
+
+            if (!ours || part.HasPorts)
+                return false;
+
+            Vector2Int size = part.RotatedSize;
+            int from = 0;
+
+            // The highest thing under any column the pillar stands on. It has to clear all of them.
+            for (int dx = 0; dx < size.x; dx++)
+            for (int dy = 0; dy < size.y; dy++)
+                from = Mathf.Max(from, ColumnUnder(map, part, part.Origin.x + dx, part.Origin.y + dy));
+
+            int gap = part.Origin.layer - from;
+            if (gap <= 0)
+                return false;
+
+            PartDefinition longer = pillars.ForLayers(part.Definition.heightLayers + gap);
+            if (longer == null)
+                return false;
+
+            var candidate = new PlacedPart(longer, new GridCoord(part.Origin.x, part.Origin.y, from),
+                part.Rotation, part.ColorIndex)
+            {
+                Role = part.Role,
+            };
+
+            // Tested with the old one out of the way, since the new one stands where it stood.
+            map.Remove(part);
+
+            if (map.CanPlace(candidate) == PlacementResult.Blocked || !map.Add(candidate))
+            {
+                map.Add(part);
+                return false;
+            }
+
+            taller = candidate;
+            return true;
+        }
+
+        /// <summary>Rest layer of one column, blind to the part itself.</summary>
+        static int ColumnUnder(GridMap map, PlacedPart part, int x, int y)
+        {
+            for (int layer = part.Origin.layer - 1; layer >= 0; layer--)
+            {
+                PlacedPart occupant = map.At(new GridCoord(x, y, layer));
+
+                if (occupant != null && occupant != part)
+                    return occupant.TopLayerAt(x, y);
+            }
+
+            return 0;
         }
 
         /// <summary>

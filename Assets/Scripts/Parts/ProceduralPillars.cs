@@ -112,6 +112,10 @@ namespace BlockMarbleRun.Parts
             return def;
         }
 
+        /// <summary>Whether this part is one of the support columns, modelled or generated.</summary>
+        public bool IsPillar(PartDefinition def) =>
+            def != null && (def == _source || (def.id != null && def.id.StartsWith(IdPrefix)));
+
         /// <summary>Rebuilds a pillar named in a save file, for ids the catalog has never heard of.</summary>
         public static PartDefinition Resolve(string id)
         {

@@ -57,6 +57,11 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestSelectionMirrorSwapsHandedParts();
             TestProceduralPillarHeights();
             TestStudsAreFoundByHeightAboveTheGrid();
+            TestABowlIsNotMistakenForStuds();
+            TestALiftedPillarIsRecutRatherThanStackedOn();
+            TestALiftedScaffoldBrickBecomesAPillar();
+            TestATallGapIsFilledByOnePillar();
+            TestLevelsOfferedOverABuild();
             TestPlatesAreHalfABrick();
             TestStackingOnAStepAboveTheGround();
             TestScaffoldingLeavesRoomForTheDescendingPiece();
@@ -1336,6 +1341,243 @@ namespace BlockMarbleRun.EditorTools.Tests
 
                 Check($"a brick rests on the shelf at ({x},{y},{top})",
                     map.CanPlace(stacked) != PlacementResult.Blocked && map.IsSupported(stacked));
+            }
+        }
+
+        /// <summary>
+        /// A funnel has studs on its shelf and nowhere else.
+        ///
+        /// Its bowl slopes continuously from the rim down to the throat, so somewhere in that slope
+        /// every cell passes through the height a stud top would be at - and reading only a cell's
+        /// highest point put a ring of studs around every large funnel that has none. A stud is a
+        /// flat disc standing on a flat surface, and a slope is neither.
+        /// </summary>
+        static void TestABowlIsNotMistakenForStuds()
+        {
+            int checkedFunnels = 0;
+
+            foreach (string id in new[] { "funnel_6x7", "funnel_8x9", "funnel_10x10" })
+            {
+                PartDefinition funnel = FindDefinition(id);
+                if (funnel?.topStuds == null)
+                    continue;
+
+                checkedFunnels++;
+
+                int studs = 0;
+                foreach (bool stud in funnel.topStuds)
+                    if (stud)
+                        studs++;
+
+                // The lip, and only the lip. Two studs is what the part is modelled with.
+                Check($"{id} has exactly its lip studs", studs == 2, $"found {studs}");
+
+                // And they are together on one edge, not scattered around a rim.
+                var found = new List<Vector2Int>();
+                for (int y = 0; y < funnel.footprintSize.y; y++)
+                for (int x = 0; x < funnel.footprintSize.x; x++)
+                    if (funnel.topStuds[y * funnel.footprintSize.x + x])
+                        found.Add(new Vector2Int(x, y));
+
+                if (found.Count == 2)
+                    Check($"{id} lip studs are side by side",
+                        Mathf.Abs(found[0].x - found[1].x) + Mathf.Abs(found[0].y - found[1].y) == 1,
+                        $"{found[0]} and {found[1]}");
+            }
+
+            Check("some funnels exist to check", checkedFunnels > 0);
+        }
+
+        /// <summary>
+        /// A pillar carried up with a copied group is made longer, not stood on a tower of bricks.
+        ///
+        /// It is one part cut to a height, and lifting it changes the height it needs. Filling the
+        /// gap underneath works structurally and looks like scaffolding holding up scaffolding.
+        /// </summary>
+        static void TestALiftedPillarIsRecutRatherThanStackedOn()
+        {
+            PartDefinition source = FindDefinition("pillar_2x2x7");
+            PartDefinition brick = FindDefinition("building_block_2x2");
+
+            if (source?.mesh == null || brick == null)
+            {
+                Check("pillar test parts exist", false);
+                return;
+            }
+
+            ProceduralPillars.Active = new ProceduralPillars(source);
+            ScaffoldBuilder.Plate = FindDefinition("building_block_2x2_plate");
+
+            var map = new GridMap();
+
+            // A pillar standing clear of the ground, as one pasted higher up arrives.
+            const int lift = 4;
+            var hanging = new PlacedPart(source, new GridCoord(0, 0, lift), 0, 0);
+            map.Add(hanging);
+
+            var lengthened = new List<(PlacedPart Old, PlacedPart New)>();
+            List<PlacedPart> added = ScaffoldBuilder.ExtendLiftedColumns(
+                map, new List<PlacedPart> { hanging }, brick, lengthened);
+
+            Check("the pillar is re-cut rather than propped", lengthened.Count == 1,
+                $"{lengthened.Count} re-cut, {added.Count} bricks added");
+
+            if (lengthened.Count != 1)
+                return;
+
+            (PlacedPart old, PlacedPart taller) = lengthened[0];
+
+            Check("nothing was stacked underneath it", added.Count == 0, $"{added.Count} added");
+            Check("the new pillar reaches the ground", taller.Origin.layer == 0);
+
+            Check("and is longer by exactly the gap",
+                taller.Definition.heightLayers == old.Definition.heightLayers + lift,
+                $"{taller.Definition.heightLayers} vs {old.Definition.heightLayers} + {lift}");
+
+            Check("it is still a pillar", ProceduralPillars.Active.IsPillar(taller.Definition));
+
+            // The old one must be gone from the map, or the two occupy the same cells.
+            Check("the shorter pillar was taken out", !map.Contains(old));
+            Check("the longer one is in", map.Contains(taller));
+        }
+
+        /// <summary>
+        /// A scaffold brick carried up becomes a pillar, and a brick the player laid does not.
+        ///
+        /// The first is the game's own propping and may be replaced by whatever does the job best.
+        /// The second is someone's build, and quietly turning it into a pillar because it happened to
+        /// be lifted would be editing their creation for them.
+        /// </summary>
+        static void TestALiftedScaffoldBrickBecomesAPillar()
+        {
+            PartDefinition source = FindDefinition("pillar_2x2x7");
+            PartDefinition brick = FindDefinition("building_block_2x2");
+
+            if (source?.mesh == null || brick == null)
+            {
+                Check("pillar test parts exist", false);
+                return;
+            }
+
+            ProceduralPillars.Active = new ProceduralPillars(source);
+            ScaffoldBuilder.Plate = FindDefinition("building_block_2x2_plate");
+
+            const int lift = 8;
+
+            // The scaffolder's own brick, in the colour it places them.
+            var map = new GridMap();
+            var ours = new PlacedPart(brick, new GridCoord(0, 0, lift), 0, ScaffoldBuilder.ScaffoldColour);
+            map.Add(ours);
+
+            var lengthened = new List<(PlacedPart Old, PlacedPart New)>();
+            ScaffoldBuilder.ExtendLiftedColumns(map, new List<PlacedPart> { ours }, brick, lengthened);
+
+            Check("a lifted scaffold brick is replaced by a pillar", lengthened.Count == 1);
+
+            if (lengthened.Count == 1)
+            {
+                Check("the pillar reaches the ground", lengthened[0].New.Origin.layer == 0);
+                Check("and it is a pillar", ProceduralPillars.Active.IsPillar(lengthened[0].New.Definition));
+            }
+
+            // The player's own brick, in a colour they chose.
+            var theirs = new GridMap();
+            var mine = new PlacedPart(brick, new GridCoord(0, 0, lift), 0, 0);
+            theirs.Add(mine);
+
+            var untouched = new List<(PlacedPart Old, PlacedPart New)>();
+            ScaffoldBuilder.ExtendLiftedColumns(theirs, new List<PlacedPart> { mine }, brick, untouched);
+
+            Check("a brick the player laid is left alone", untouched.Count == 0);
+            Check("and it is still in the map where they put it", theirs.Contains(mine));
+        }
+
+        /// <summary>
+        /// A tall gap under a lifted run is closed by one pillar, not a stack of bricks.
+        ///
+        /// The filler used to reach only for bricks and plates; the pillar was offered separately and
+        /// only when a part was first placed, so anything lifted afterwards got a tower.
+        /// </summary>
+        static void TestATallGapIsFilledByOnePillar()
+        {
+            PartDefinition source = FindDefinition("pillar_2x2x7");
+            PartDefinition brick = FindDefinition("building_block_2x2");
+            PartDefinition ramp = FindDefinition("slide_2x4");
+
+            if (source?.mesh == null || brick == null || ramp == null)
+            {
+                Check("pillar and ramp parts exist", false);
+                return;
+            }
+
+            ProceduralPillars.Active = new ProceduralPillars(source);
+            ScaffoldBuilder.Plate = FindDefinition("building_block_2x2_plate");
+
+            var map = new GridMap();
+            var track = new PlacedPart(ramp, new GridCoord(0, 0, 10), 0, 0);
+            map.Add(track);
+
+            List<PlacedPart> supports = ScaffoldBuilder.BuildSupports(map, track, brick);
+
+            Check("a run ten layers up is propped", supports.Count > 0);
+
+            int pillars = 0, others = 0;
+            foreach (PlacedPart support in supports)
+                if (ProceduralPillars.Active.IsPillar(support.Definition)) pillars++; else others++;
+
+            Check("the props are pillars rather than stacks of brick", pillars > 0,
+                $"{pillars} pillars, {others} bricks");
+        }
+
+        /// <summary>
+        /// The levels offered over a spot include under a raised run, not just on top of the pile.
+        ///
+        /// Space beneath something already built is where a piece often belongs on a marble run, and
+        /// no ray can point at a gap - so it has to be reachable by stepping through levels rather
+        /// than by aiming.
+        /// </summary>
+        static void TestLevelsOfferedOverABuild()
+        {
+            PartDefinition brick = FindDefinition("building_block_2x2");
+            PartDefinition pillar = FindDefinition("pillar_2x2x7");
+
+            if (brick == null || pillar == null)
+            {
+                Check("level test parts exist", false);
+                return;
+            }
+
+            var map = new GridMap();
+
+            // A run held up on a pillar, with clear air underneath it.
+            var column = new PlacedPart(pillar, new GridCoord(4, 0, 0), 0, 0);
+            var above = new PlacedPart(brick, new GridCoord(0, 0, pillar.heightLayers), 0, 0);
+
+            map.Add(column);
+            map.Add(above);
+
+            List<int> levels = PlacementSolver.LevelsAt(map, brick, 0, 0, 0, 0);
+
+            Check("the ground is offered", levels.Contains(0));
+
+            Check("so is the top of what is built there",
+                levels.Contains(above.TopLayerAt(0, 0)), string.Join(",", levels));
+
+            // The point of the exercise: a level under the raised part, which resting alone misses.
+            bool underneath = false;
+            foreach (int level in levels)
+                if (level > 0 && level + brick.heightLayers <= above.Origin.layer)
+                    underneath = true;
+
+            Check("and a level in the space beneath it", underneath, string.Join(",", levels));
+
+            // Every level offered has to be one the piece actually fits at.
+            foreach (int level in levels)
+            {
+                var candidate = new PlacedPart(brick, new GridCoord(0, 0, level), 0, 0);
+
+                Check($"level {level} is placeable",
+                    map.CanPlace(candidate) != PlacementResult.Blocked);
             }
         }
     }

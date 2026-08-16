@@ -177,7 +177,11 @@ namespace BlockMarbleRun.Build
                 GUILayout.Label($"Click to lift the build {controller.GrowthLayers} layer(s) and place here", _style);
 
             if (controller.Precise)
-                GUILayout.Label("PRECISE - sliding stud by stud, R still turns / cycles joins", _style);
+            {
+                GUILayout.Label($"PRECISE - sliding stud by stud    scroll for level " +
+                                $"({controller.LevelCount} here)    R still turns / cycles joins", _style);
+
+            }
             GUILayout.Label("Left click place    Shift precise    V grab (click picks, drag selects)    Del remove", _style);
 
             if (controller.Pasting)

@@ -335,6 +335,58 @@ namespace BlockMarbleRun.Grid
         /// Height at which the part comes to rest on what is beneath it: the highest column under any
         /// of its base cells, as it would sit in the hand.
         /// </summary>
+        /// <summary>
+        /// Every layer a piece could sit at over one spot, lowest first.
+        ///
+        /// The tops of whatever stands in those columns, plus the ground, plus the layer under each
+        /// part - a marble run is full of places where a piece belongs beneath something already
+        /// built, and a rest layer alone can only ever offer the top of the pile.
+        ///
+        /// Only levels the piece actually fits at are returned, so stepping through them cannot
+        /// arrive anywhere it could not be placed.
+        /// </summary>
+        public static List<int> LevelsAt(GridMap map, PartDefinition def, int anchorX, int anchorY,
+                                         int rotation, byte colorIndex)
+        {
+            var levels = new List<int>();
+            var seen = new HashSet<int>();
+
+            var probe = new PlacedPart(def, new GridCoord(anchorX, anchorY, 0), rotation, colorIndex);
+
+            void Offer(int layer)
+            {
+                if (layer < 0 || !seen.Add(layer))
+                    return;
+
+                var candidate = new PlacedPart(def, new GridCoord(anchorX, anchorY, layer),
+                    rotation, colorIndex);
+
+                if (map.CanPlace(candidate) != PlacementResult.Blocked)
+                    levels.Add(layer);
+            }
+
+            Offer(0);
+
+            int height = Mathf.Max(1, def.heightLayers);
+
+            foreach (GridCoord cell in probe.OccupiedCells())
+            {
+                if (cell.layer != 0)
+                    continue;
+
+                foreach (PlacedPart part in map.PartsInColumn(cell.x, cell.y))
+                {
+                    // On top of it, and under it: the gap beneath a raised run is exactly where a
+                    // piece often needs to go, and it is unreachable by pointing at anything.
+                    Offer(part.TopLayerAt(cell.x, cell.y));
+                    Offer(part.Origin.layer - height);
+                }
+            }
+
+            levels.Sort();
+            return levels;
+        }
+
         public static int RestLayerFor(GridMap map, PartDefinition def, int anchorX, int anchorY,
                                        int rotation, byte colorIndex)
         {

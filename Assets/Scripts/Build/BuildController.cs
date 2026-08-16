@@ -631,7 +631,7 @@ namespace BlockMarbleRun.Build
             // physical key carries + and - depends on the keyboard layout, and the Input System reads
             // keys by position rather than by the character printed on them - so on a Nordic layout
             // the key marked + is the one it calls minus. The wheel has no layout.
-            float scroll = mouse.scroll.ReadValue().y;
+            float scroll = WheelDelta(mouse);
             if (Mathf.Abs(scroll) > 0.01f)
                 lift = scroll > 0f ? 1 : -1;
 
@@ -1059,12 +1059,45 @@ namespace BlockMarbleRun.Build
             Keyboard keys = Keyboard.current;
             bool wantsPrecise = keys != null && (keys.leftShiftKey.isPressed || keys.rightShiftKey.isPressed);
 
-            PlacedPart candidate = CandidateAt(hit.Cell);
-            UpdatePreciseLock(wantsPrecise, candidate, hit.Cell);
+            // The wheel picks the level while a placement is held, so it must not also dolly.
+            if (orbitCamera != null)
+                orbitCamera.ZoomLocked = _precise;
 
-            // Re-solve once locked, so the first frame of precise mode already follows the lock.
             if (_precise)
-                candidate = CandidateAt(hit.Cell);
+            {
+                float scroll = WheelDelta(mouse);
+
+                if (Mathf.Abs(scroll) > 0.01f)
+                    _levelStep = scroll > 0f ? 1 : -1;
+            }
+
+            // The cursor for this frame, worked out before anything is solved: on a plane at the held
+            // piece's own height while a placement is held, otherwise whatever the ray struck.
+            GridCoord cursor = hit.Cell;
+            int wasAt = _lockedPlacement?.Origin.layer ?? 0;
+
+            if (_precise && _lockedPlacement != null &&
+                raycaster.RaycastLevel(screen, wasAt * GridCoord.LayerUnits, out GridCoord onPlane))
+                cursor = onPlane;
+
+            // Once. Solving twice a frame was the reason the wheel did nothing: the first solve
+            // consumed the step and the second re-slid at the old level, so a turn of the wheel was
+            // spent before the placement it was meant to move had been worked out.
+            PlacedPart candidate = CandidateAt(cursor);
+
+            UpdatePreciseLock(wantsPrecise, candidate, cursor);
+
+            // A placement taken this frame is the one to show, rather than the free one that was on
+            // screen a moment ago.
+            if (_precise && _lockedPlacement != null)
+                candidate = _lockedPlacement;
+
+            // Changing level moves the plane the cursor is read from, so the reference is taken again
+            // on the new one. Without this the height change is read as a sideways slide.
+            if (_precise && _lockedPlacement != null && _lockedPlacement.Origin.layer != wasAt &&
+                raycaster.RaycastLevel(screen,
+                    _lockedPlacement.Origin.layer * GridCoord.LayerUnits, out GridCoord moved))
+                _lockedCursor = moved;
 
             PlacementResult result = _map.CanPlace(candidate);
 
@@ -1170,18 +1203,118 @@ namespace BlockMarbleRun.Build
         PlacedPart SlideLocked(GridCoord cursorCell)
         {
             GridCoord origin = _lockedPlacement.Origin;
+            PartDefinition def = _lockedPlacement.Definition;
 
             var moved = new GridCoord(
                 origin.x + (cursorCell.x - _lockedCursor.x),
                 origin.y + (cursorCell.y - _lockedCursor.y),
                 origin.layer);
 
-            // Fold the movement into the lock so R can re-solve from where the piece actually is.
-            _lockedPlacement = new PlacedPart(_lockedPlacement.Definition, moved,
+            // The levels available over the spot it has been slid to, and the one to settle at.
+            _levels = PlacementSolver.LevelsAt(_map, def, moved.x, moved.y,
                 _lockedPlacement.Rotation, _colorIndex);
+
+            int layer = ChooseLevel(def, moved, _levelStep);
+            _levelStep = 0;
+
+            moved = new GridCoord(moved.x, moved.y, layer);
+
+            // Fold the movement into the lock so R can re-solve from where the piece actually is.
+            _lockedPlacement = new PlacedPart(def, moved, _lockedPlacement.Rotation, _colorIndex);
             _lockedCursor = cursorCell;
 
             return _lockedPlacement;
+        }
+
+        List<int> _levels = new();
+        int _levelStep;
+
+        /// <summary>
+        /// The wheel. Vertical if there is any, horizontal only when there is not.
+        ///
+        /// A browser turns a vertical wheel into a horizontal one while shift is held - it is how a
+        /// page is scrolled sideways - so in precise placement, which is held with shift, the y
+        /// reading is always zero and the movement arrives on x. Reading only y left the wheel dead
+        /// in the one mode it was added for.
+        ///
+        /// The two are read in order rather than by whichever is larger, because the platforms differ
+        /// and only one of them needs the fallback. A native build reports the wheel on y with shift
+        /// held like without it, so x there is a real sideways gesture - a trackpad swipe - and taking
+        /// the larger of the two would let that scrub through levels by accident. Preferring y means
+        /// the fallback can only fire where y is genuinely silent, which is the browser case alone.
+        /// </summary>
+        public static float WheelDelta(Mouse mouse)
+        {
+            Vector2 scroll = mouse.scroll.ReadValue();
+            return Mathf.Abs(scroll.y) > 0.01f ? scroll.y : scroll.x;
+        }
+
+        /// <summary>Levels the wheel can reach where the held piece is - the floor is not one.</summary>
+        public int LevelCount
+        {
+            get
+            {
+                int count = 0;
+
+                foreach (int level in _levels)
+                    if (level > 0)
+                        count++;
+
+                return count;
+            }
+        }
+
+        /// <summary>
+        /// Which of the available levels to settle at.
+        ///
+        /// The level is the player's, not the solver's: once a placement is held it stays at the
+        /// height it was taken at however far it is slid, and only the wheel moves it. Re-deciding on
+        /// every slide meant a piece dropped and rose as it crossed a build, which is the opposite of
+        /// what holding it steady is for.
+        ///
+        /// The floor is never among the choices. Accurate placement is for meeting something already
+        /// built; a piece that wants the ground can be dropped there without holding shift at all.
+        /// </summary>
+        int ChooseLevel(PartDefinition def, GridCoord at, int step)
+        {
+            if (step == 0 || _levels.Count == 0)
+                return at.layer;
+
+            // Levels that rest on the build. Sorted already, so the first at or above the current one
+            // is where stepping starts from.
+            var choices = new List<int>(_levels.Count);
+
+            foreach (int level in _levels)
+                if (level > 0)
+                    choices.Add(level);
+
+            if (choices.Count == 0)
+                return at.layer;
+
+            int index = choices.IndexOf(at.layer);
+
+            if (index < 0)
+            {
+                // Not standing on one of them - start from whichever is nearest, so the first turn of
+                // the wheel goes somewhere sensible rather than to the bottom of the list.
+                int nearest = int.MaxValue;
+
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    int distance = Mathf.Abs(choices[i] - at.layer);
+
+                    if (distance < nearest)
+                    {
+                        nearest = distance;
+                        index = i;
+                    }
+                }
+
+                // A step from nowhere lands on the nearest rather than passing over it.
+                return choices[Mathf.Clamp(index, 0, choices.Count - 1)];
+            }
+
+            return choices[Mathf.Clamp(index + step, 0, choices.Count - 1)];
         }
 
         /// <summary>
@@ -1219,17 +1352,59 @@ namespace BlockMarbleRun.Build
             if (wanted && !_precise && candidate != null)
             {
                 // Locked from whatever was on screen when the key went down, so the placement the
-                // player was looking at is the one they keep.
+                // player was looking at is the one they keep - lifted off the floor if the build
+                // offers anything better, since the whole point of holding a placement is to meet
+                // something already there.
                 _precise = true;
-                _lockedPlacement = candidate;
-                _lockedCursor = cursorCell;
-                Status = "Precise placement - slide with the mouse";
+                _lockedPlacement = LiftOffTheFloor(candidate);
+
+                // Taken on the same plane the slide will use, so the first movement does not count a
+                // step from wherever the geometry happened to put the cursor.
+                _lockedCursor = raycaster.RaycastLevel(
+                    Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero,
+                    _lockedPlacement.Origin.layer * GridCoord.LayerUnits, out GridCoord onPlane)
+                    ? onPlane
+                    : cursorCell;
+                Status = "Precise placement - slide to position, scroll for level";
             }
             else if (!wanted && _precise)
             {
                 _precise = false;
                 _lockedPlacement = null;
+
+                // An unspent turn of the wheel does not carry into the next placement.
+                _levelStep = 0;
+                _levels.Clear();
             }
+        }
+
+        /// <summary>
+        /// Moves a placement off layer 0 as it is picked up, when the build offers a level there.
+        ///
+        /// Without this a piece grabbed over open floor stays on the floor however far it is slid,
+        /// because the level is deliberately sticky - and the one place accurate placement is never
+        /// wanted is the ground, which needs no accuracy.
+        /// </summary>
+        PlacedPart LiftOffTheFloor(PlacedPart candidate)
+        {
+            if (candidate.Origin.layer != 0)
+                return candidate;
+
+            _levels = PlacementSolver.LevelsAt(_map, candidate.Definition,
+                candidate.Origin.x, candidate.Origin.y, candidate.Rotation, _colorIndex);
+
+            int lowest = int.MaxValue;
+
+            foreach (int level in _levels)
+                if (level > 0 && level < lowest)
+                    lowest = level;
+
+            if (lowest == int.MaxValue)
+                return candidate;
+
+            return new PlacedPart(candidate.Definition,
+                new GridCoord(candidate.Origin.x, candidate.Origin.y, lowest),
+                candidate.Rotation, candidate.ColorIndex);
         }
 
         void TryDelete(Vector2 screen)
