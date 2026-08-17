@@ -855,6 +855,14 @@ without a cache step, which was the largest cost of the hosted version.
 What this gives up is builds on someone else's machine. What it keeps is the point of §10's rule: a
 WebGL build that can be run at any time, plus a deployed Pages build to hand someone.
 
+**A second lesson, learned the expensive way.** A self-hosted runner fetches every action it uses from
+`codeload.github.com` at the start of every job — `checkout`, `upload-artifact`, the Pages pair — where
+a hosted runner has them baked into its image. An afternoon of builds got the machine's address rate
+limited, and then jobs failed in *setup*, before Unity was reached, with nothing wrong in the project
+at all. The workflow now uses no actions whatever: `git` fetches the source and `git` pushes the
+Pages build to a `gh-pages` branch. What that costs is uploaded artifacts, which for builds that
+already live on the machine that made them is close to nothing.
+
 **One rule comes with it.** The repository is public — it has to be, for Pages to deploy from a free
 account — and a public repository with a self-hosted runner is the case GitHub warns about: anyone can
 fork and open a pull request, and a workflow that starts by itself would run their code on the

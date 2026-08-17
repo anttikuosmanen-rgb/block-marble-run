@@ -20,6 +20,11 @@ name: Build
 # The triggers stay manual while the runner is the author's Mac. The repository is public, so a
 # workflow that started by itself would run a fork's code on that machine; workflow_dispatch is the
 # guard, because only write access can start it.
+#
+# NOTE: there is no `uses:` anywhere below, and that is deliberate. A self-hosted runner downloads
+# every action's tarball from codeload.github.com on every job - hosted runners ship them pre-cached -
+# and an afternoon of builds was enough to get this machine's address 429ed, which failed the jobs in
+# setup before Unity was ever reached. git does the same work and is already installed.
 on:
   workflow_dispatch:
     inputs:
@@ -29,13 +34,16 @@ on:
         default: webgl
         options: [webgl, macos, all]
       deploy_pages:
-        description: Deploy the Pages build afterwards
+        description: Publish the Pages build to the gh-pages branch
         type: boolean
         default: false
 
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -45,30 +53,46 @@ jobs:
     runs-on: [self-hosted, macOS, unity]
     strategy:
       fail-fast: false
+      # One at a time: they share a machine, a Library folder and a project lock, and Unity will not
+      # open the same project twice.
+      max-parallel: 1
       matrix:
         include:
           # Self-hosted: server can send Content-Encoding: br, so no JS decompressor ships.
           - name: WebGL (self-host)
             group: webgl
             buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildWebGLSelfHost
-            artifact: webgl-selfhost
             path: build/webgl-selfhost
           # GitHub Pages cannot set response headers, so the fallback decompressor is required.
           - name: WebGL (Pages)
             group: webgl
             buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildWebGLPages
-            artifact: webgl-pages
             path: build/webgl-pages
+            publishes: true
           - name: macOS
             group: macos
             buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildMacOS
-            artifact: macos
             path: build/macos
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        run: |
+          set -euo pipefail
+
+          # actions/checkout's job, done with git. The workspace persists between runs, so this is a
+          # fetch after the first time - which is also what keeps Library/ warm.
+          if [ ! -d .git ]; then
+            git init -q .
+            git remote add origin "https://github.com/$GITHUB_REPOSITORY"
+          fi
+          git fetch -q --depth 1 origin "$GITHUB_SHA"
+          git checkout -q -f FETCH_HEAD
+          # Leave build/ and Library/ alone: one is the output, the other is the reason a second
+          # build is minutes rather than an hour.
+          git clean -qfd -e build -e Library
 
       - name: Build
+        if: inputs.targets == 'all' || inputs.targets == matrix.group
         run: |
           set -euo pipefail
 
@@ -86,37 +110,34 @@ jobs:
           # batchmode build failed. -nographics is safe here: nothing renders during a build.
           "$unity" -projectPath "$PWD" -batchmode -nographics -quit \
             -logFile - -executeMethod ${{ matrix.buildMethod }}
+
+      - name: Publish to gh-pages
+        if: matrix.publishes && inputs.deploy_pages && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # An orphan commit each time. The branch is a published artifact rather than a history
+          # worth keeping, and an accumulating one would carry every past build's 11 MB forever.
+          work=$(mktemp -d)
+          cp -R "${{ matrix.path }}/." "$work/"
+          touch "$work/.nojekyll"   # else Pages drops anything under a leading-underscore path
+
+          cd "$work"
+          git init -q -b gh-pages .
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Build from ${GITHUB_SHA:0:7}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}" gh-pages
+
+          echo "Published: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+
+      - name: Where the build went
         if: inputs.targets == 'all' || inputs.targets == matrix.group
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.path }}
-        if: inputs.targets == 'all' || inputs.targets == matrix.group
-
-  deploy-pages:
-    name: Deploy to Pages
-    needs: build
-    if: inputs.deploy_pages && github.ref == 'refs/heads/main'
-    # Hosted, unlike the build jobs: this one needs the artifact and nothing else, so there is no
-    # reason to occupy the Mac with it - and the self-hosted runner downloads every action from
-    # codeload on each run, which is what failed here with a 429. Hosted runners have them cached.
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: webgl-pages
-          path: dist
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-      - id: deployment
-        uses: actions/deploy-pages@v4
+        run: |
+          echo "${{ matrix.path }}, on the runner:"
+          du -sh "${{ matrix.path }}" || true
+          echo "No artifact upload - upload-artifact is an action, and downloading actions is what"
+          echo "got this machine rate-limited. The output is on the Mac that built it."

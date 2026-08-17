@@ -151,8 +151,6 @@ else — and a Unity 6 Personal entitlement has neither a serial nor a `.ulf`. `
 runs the editor in Docker and cannot start without one, so the hosted path is closed rather than
 merely unconfigured. The machine that already has an activated editor builds instead.
 
-Running a build:
-
 ```bash
 tools/ci-build.sh                # WebGL, no deploy
 tools/ci-build.sh macos          # macOS
@@ -162,24 +160,21 @@ tools/ci-build.sh all deploy     # everything, and publish to Pages
 The script brings the runner up, dispatches the workflow, streams the result, and takes the runner
 down again on any exit — including a failed build or a Ctrl-C. The runner exists for the length of one
 build and no longer: a machine sitting quietly available to run jobs is exactly what should not be
-there on a public repository.
+there on a public repository. It is registered to this repository only and is **not** a launchd
+service.
 
-Dispatching by hand from **Actions → Build → Run workflow** works too, but then the runner has to be
-started (`~/actions-runner/run.sh`) and stopped by you. A run queued while the runner is down simply
-waits for it.
+Deploying publishes `build/webgl-pages` to the **`gh-pages` branch** as a fresh orphan commit, which
+Pages serves at <https://anttikuosmanen-rgb.github.io/block-marble-run/>. That is the build carrying
+the JavaScript decompressor, because Pages cannot send `Content-Encoding: br`.
 
-The runner is registered to this repository only and is deliberately **not** installed as a launchd
-service, so nothing runs on the machine unless a build is asked for. The workspace persists between
-runs, which keeps `Library/` warm and makes a second build far quicker than the first — that cache
-was the biggest cost of the hosted version.
+**The workflow uses no actions at all, on purpose.** A self-hosted runner downloads every action's
+tarball from `codeload.github.com` on every job — hosted runners have them baked into the image — and
+an afternoon of builds was enough to get the machine's address 429ed, which failed jobs in setup
+before Unity was reached. `git` does the same work. The visible cost is no uploaded artifacts: builds
+stay in the runner's workspace, on the machine that made them.
 
-Ticking **Deploy the Pages build afterwards** publishes to
-<https://anttikuosmanen-rgb.github.io/block-marble-run/>, which is the always-current playable link.
-That build is the one with the JavaScript decompressor, because Pages cannot send
-`Content-Encoding: br`.
-
-**Do not add a `push` or `pull_request` trigger to this workflow while it runs on the self-hosted
-runner.** The repository is public, so anyone can fork it and open a pull request; a workflow that
-starts automatically would run their code on the author's Mac. `workflow_dispatch` can only be started
-by someone with write access, which is what makes the arrangement safe. If automatic builds are ever
-wanted, they have to move to a hosted runner first — and that needs the licence problem above solved.
+**Do not add a `push` or `pull_request` trigger while this runs on the self-hosted runner.** The
+repository is public, so anyone can fork it and open a pull request; a workflow that started
+automatically would run their code on the author's Mac. `workflow_dispatch` can only be started by
+someone with write access, which is what makes the arrangement safe. Automatic builds would have to
+move to a hosted runner first — and that needs the licence problem above solved.
