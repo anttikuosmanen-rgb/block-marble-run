@@ -1,0 +1,36 @@
+name: Unity activation file
+
+# One-off, run by hand. Produces the .alf that Unity's manual activation page wants, so a
+# Personal licence can be turned into the UNITY_LICENSE secret the build workflow needs.
+#
+#   1. Actions -> Unity activation file -> Run workflow
+#   2. Download the "unity-activation-file" artifact and unzip it
+#   3. Upload the .alf at https://license.unity3d.com/manual, sign in, pick Personal
+#   4. gh secret set UNITY_LICENSE < Unity_v6000.x.ulf
+#      gh secret set UNITY_EMAIL      (the Unity account address)
+#      gh secret set UNITY_PASSWORD   (its password)
+#   5. Restore the push / pull_request triggers in build.yml
+#
+# The .alf is generated here rather than locally on purpose: it is created by the same Unity
+# version in the same Linux image the build runs in, which is what the licence is issued against.
+#
+# The artifact contains no secret - the .alf is a request, not a licence. The .ulf it returns is
+# the secret, and it never goes anywhere near the repository.
+on:
+  workflow_dispatch:
+
+jobs:
+  activation:
+    name: Request activation file
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the editor version from ProjectSettings/ProjectVersion.txt, as unity-builder does.
+      - id: request
+        uses: game-ci/unity-request-activation-file@v2
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unity-activation-file
+          path: ${{ steps.request.outputs.filePath }}
