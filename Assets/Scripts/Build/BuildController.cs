@@ -1109,6 +1109,21 @@ namespace BlockMarbleRun.Build
                 LoadReport report = _saves.Apply(model, _map, Spawn);
                 _history.Clear(); // history from the previous build cannot apply to this one
 
+                // Heights that are not in the save, because they are not the build's shape: a run
+                // feeding a funnel stands 0.8 mm proud of its studs so its channel meets the chute
+                // (ChannelNetwork). Loading rebuilds the parts, so the lifts have to be worked out
+                // again - and worked out here rather than left to the watcher, so a loaded build is
+                // correct in the frame it appears rather than the one after.
+                if (ChannelNetwork.Recompute(_map))
+                    foreach (PlacedPart lifted in _map.Parts)
+                    {
+                        if (lifted.Instance == null)
+                            continue;
+
+                        lifted.GetTransform(out Vector3 at, out Quaternion facing);
+                        lifted.Instance.transform.SetPositionAndRotation(at, facing);
+                    }
+
                 orbitCamera.Frame(_map);
                 Status = $"Loaded '{model.name}': {report}";
             }
