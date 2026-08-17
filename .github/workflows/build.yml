@@ -95,7 +95,10 @@ jobs:
     name: Deploy to Pages
     needs: build
     if: inputs.deploy_pages && github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, macOS, unity]
+    # Hosted, unlike the build jobs: this one needs the artifact and nothing else, so there is no
+    # reason to occupy the Mac with it - and the self-hosted runner downloads every action from
+    # codeload on each run, which is what failed here with a 429. Hosted runners have them cached.
+    runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
