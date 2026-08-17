@@ -852,8 +852,15 @@ repository. No secrets, no Docker, no licence handling. The runner is not instal
 it is started by hand when a build is wanted — and its workspace persists, so `Library/` stays warm
 without a cache step, which was the largest cost of the hosted version.
 
-What this gives up is builds on someone else's machine, which for a single-author private repository
-is not much. What it keeps is the point of §10's rule: a WebGL build that can be run at any time.
+What this gives up is builds on someone else's machine. What it keeps is the point of §10's rule: a
+WebGL build that can be run at any time, plus a deployed Pages build to hand someone.
+
+**One rule comes with it.** The repository is public — it has to be, for Pages to deploy from a free
+account — and a public repository with a self-hosted runner is the case GitHub warns about: anyone can
+fork and open a pull request, and a workflow that starts by itself would run their code on the
+author's machine. `workflow_dispatch` is the guard, because only someone with write access can start
+it. So the triggers stay manual for as long as the runner is the author's Mac, and restoring automatic
+builds means moving to a hosted runner first, which means solving the licence problem above.
 
 **Common settings**: IL2CPP, Managed Stripping High, unused engine modules stripped, `link.xml` preserving save-model types (§11).
 
