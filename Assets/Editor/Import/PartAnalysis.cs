@@ -1365,8 +1365,13 @@ namespace BlockMarbleRun.EditorTools.Import
 
         static bool SitsAt(float measured, float floorMm, float toleranceMm, out float snapped)
         {
-            int layer = Mathf.RoundToInt((measured - floorMm) / BrickPitchMm);
-            snapped = layer * BrickPitchMm + floorMm;
+            // Per grid layer, not per brick. The original rule was 6.4 + k*19.2, written when a layer
+            // was a whole brick; since the grid stepped half-bricks (DESIGN.md 1.5) a channel can sit
+            // at 6.4 above any layer boundary, and the funnels do exactly that - their chute is one
+            // layer plus a channel above their base, so under the brick rule they derived no mouths at
+            // all and could be neither joined nor welded.
+            int layer = Mathf.RoundToInt((measured - floorMm) / LayerHeightMm);
+            snapped = layer * LayerHeightMm + floorMm;
 
             return layer >= 0 && Mathf.Abs(measured - snapped) <= toleranceMm;
         }

@@ -62,6 +62,13 @@ namespace BlockMarbleRun.Track
                     if (map.FindConnection(part, port) != null)
                         continue;
 
+                    // A mouth emptying into a funnel is not a leak, however open it looks to the
+                    // port graph: a funnel has no mouth of its own to be joined to - its chute
+                    // starts a stud inside its footprint - so the ball leaves the run here on
+                    // purpose. Marking it says the build is broken where it is doing its job.
+                    if (LeadsIntoAFeed(map, part, port))
+                        continue;
+
                     GameObject marker = Take(used++);
                     marker.transform.SetPositionAndRotation(
                         // Lift clear of the channel floor so the marker is not buried in the trough.
@@ -92,6 +99,32 @@ namespace BlockMarbleRun.Track
 
             float wave = 0.65f + 0.35f * Mathf.Sin(Time.unscaledTime * 4f);
             markerMaterial.SetColor("_BaseColor", openColour * wave);
+        }
+
+        /// <summary>
+        /// Whether this mouth empties onto a part that takes a channel feed - a funnel.
+        ///
+        /// Recognised by the lip it asks of what feeds it (PartDefinition.channelLipUnits), which is
+        /// the same fact from the other side: a part whose channel is measured from its stud shelf is
+        /// one that a run plugs onto and pours into.
+        /// </summary>
+        static bool LeadsIntoAFeed(GridMap map, PlacedPart part, PlacedPart.WorldPort port)
+        {
+            foreach (Vector2Int cell in port.OutsideCells())
+            {
+                foreach (PlacedPart other in map.PartsInColumn(cell.x, cell.y))
+                {
+                    if (other == part || other.Definition.channelLipUnits <= 0f)
+                        continue;
+
+                    // Underneath this run rather than somewhere else in the column: a funnel two
+                    // storeys down is not what this mouth is pouring into.
+                    if (other.TopLayerAt(cell.x, cell.y) <= part.Origin.layer)
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         GameObject Take(int index)

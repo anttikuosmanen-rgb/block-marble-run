@@ -366,6 +366,32 @@ and only in collision - the mesh is drawn exactly where it was.
 Welding (§7.1) has to know about it, or the step comes back in play mode alone: the welded run is
 built from each part's collider transform rather than from the part's own.
 
+### 3.5.3 A funnel has no mouth on its perimeter
+
+The obvious repair for the funnels deriving no channel mouths was the floor rule: a channel was
+accepted only at `6.4 + k*19.2`, a *brick*-pitch rule written when a layer was a whole brick, and the
+funnel's chute is at 16.8 mm - one grid layer plus a channel. The rule is now per layer,
+`6.4 + k*9.6`, which is what the half-brick grid (§1.5) implies and which changes no other part's
+mouths at all: every one of the 26 derives exactly what it did before.
+
+It does not give the funnels mouths either, and the height map says why. **Their chute never reaches
+the footprint edge.** It begins a stud inside, where the stud shelf ends, so the piece feeding a
+funnel stands *on top of* it rather than beside it. The port model describes mouths at a part's
+boundary meeting mouths at another's; this junction is not that shape and cannot be made into it by
+widening a tolerance.
+
+So the funnel stays portless, and the two things ports would have bought are bought directly:
+
+- **Welding** takes in the part a run stands on when that part accepts a feed (§7.1). Left out, the
+  funnel keeps a collider of its own and the junction keeps its seam - at the one place where a ball
+  is slowest and least able to survive being caught.
+- **Open-mouth markers** skip a mouth that empties onto such a part. It is not a leak; it is the run
+  doing its job.
+
+Both recognise a funnel by the lip it asks of what feeds it (§3.5.2), which is the same fact from the
+other side: a part whose channel is measured from its stud shelf is one that a run plugs onto and
+pours into.
+
 ### 3.6 Plates are generated, not modelled
 
 A plate is a brick with the middle 9.6 mm removed. Cutting one out of the block mesh gives six parts
