@@ -898,6 +898,16 @@ namespace BlockMarbleRun.EditorTools.Tests
                 return;
             }
 
+            // The join the whole arrangement rests on: the funnel's mouth is inside its own
+            // footprint, at the edge of the shelf, so a piece standing on the shelf meets it.
+            bool joined = false;
+
+            foreach (PlacedPart.WorldPort port in feed.WorldPorts())
+                if (map.FindConnection(feed, port) == placedFunnel)
+                    joined = true;
+
+            Check("the piece on the shelf joins the funnel's chute", joined);
+
             ChannelNetwork.Recompute(map);
 
             Check("the piece on the shelf rises", feed.LiftUnits > 0f,
@@ -905,6 +915,13 @@ namespace BlockMarbleRun.EditorTools.Tests
 
             Check("by the funnel's lip", Mathf.Approximately(feed.LiftUnits, funnel.channelLipUnits),
                   $"{feed.LiftUnits * 100f:0.00} against {funnel.channelLipUnits * 100f:0.00} mm");
+
+            // And the funnel itself does not. It is the height the rest is being brought to, and it
+            // is in the network too now that it has a mouth - so without care it would rise with
+            // them and the step would be exactly where it started.
+            Check("the funnel stays where it is",
+                  Mathf.Approximately(placedFunnel.LiftUnits, 0f),
+                  $"{placedFunnel.LiftUnits * 100f:0.00} mm");
 
             // The next piece along, joined to the first but standing on nothing at all.
             var second = new PlacedPart(track, new GridCoord(shelf.x, shelf.y + 2, layer), 0, 0);

@@ -135,50 +135,9 @@ namespace BlockMarbleRun.Track
                         group.Add(other);
                         queue.Enqueue(other);
                     }
-
-                    // And whatever this piece is feeding.
-                    //
-                    // A funnel has no mouth on its perimeter to be joined to: its chute begins a stud
-                    // inside its own footprint, where the stud shelf ends, so the piece that feeds it
-                    // stands on top of it rather than beside it. Nothing in the port graph can reach
-                    // it, and left out of the run it stays a collider of its own - which is precisely
-                    // the seam this class exists to remove, at the one junction where a ball is
-                    // slowest and least able to survive being caught.
-                    //
-                    // Not traversed onward: a funnel has no ports to follow, so it joins the group and
-                    // the walk continues from the pieces that do.
-                    foreach (PlacedPart fed in Feeding(map, current))
-                        if (seen.Add(fed))
-                            group.Add(fed);
                 }
 
                 yield return group;
-            }
-        }
-
-        /// <summary>
-        /// The parts this one stands on that take a channel feed - today, the funnels.
-        ///
-        /// Recognised by asking for a lift (PartDefinition.channelLipUnits), which is the same fact
-        /// from the other side: a part whose channel is measured from its stud shelf is a part that
-        /// something plugs onto and runs into.
-        /// </summary>
-        static IEnumerable<PlacedPart> Feeding(GridMap map, PlacedPart part)
-        {
-            var below = new HashSet<PlacedPart>();
-
-            foreach (GridCoord cell in part.OccupiedCells())
-            {
-                if (cell.layer <= 0)
-                    continue;
-
-                PlacedPart under = map.At(new GridCoord(cell.x, cell.y, cell.layer - 1));
-
-                if (under == null || under == part || under.Definition.channelLipUnits <= 0f)
-                    continue;
-
-                if (below.Add(under))
-                    yield return under;
             }
         }
 

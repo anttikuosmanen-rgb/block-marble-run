@@ -380,17 +380,26 @@ funnel stands *on top of* it rather than beside it. The port model describes mou
 boundary meeting mouths at another's; this junction is not that shape and cannot be made into it by
 widening a tolerance.
 
-So the funnel stays portless, and the two things ports would have bought are bought directly:
+**A port does not have to be on the perimeter.** Nothing downstream requires it: a port says where a
+channel ends and which way it faces, and the matching compares midlines and heights. So the funnel
+gets a mouth at the boundary between its stud shelf and its chute - inside its own footprint - facing
+back out over the shelf. A piece standing on the shelf then meets it exactly as two track pieces meet
+each other, and channel snapping, open-mouth marking and welding all follow from the one declaration
+rather than from three special cases.
 
-- **Welding** takes in the part a run stands on when that part accepts a feed (§7.1). Left out, the
-  funnel keeps a collider of its own and the junction keeps its seam - at the one place where a ball
-  is slowest and least able to survive being caught.
-- **Open-mouth markers** skip a mouth that empties onto such a part. It is not a leak; it is the run
-  doing its job.
+Two details decide whether it works:
 
-Both recognise a funnel by the lip it asks of what feeds it (§3.5.2), which is the same fact from the
-other side: a part whose channel is measured from its stud shelf is one that a run plugs onto and
-pours into.
+- **The mouth sits on the chute side of the shelf, not on the footprint edge.** On the edge, a feed
+  snaps up *against* the funnel instead of onto it, leaving the shelf as a gap for the ball to drop
+  into. This is the opposite of the perimeter convention, for the opposite reason: a perimeter mouth
+  faces out of the part, this one faces out of the chute across a shelf that is still the funnel's.
+- **It is declared at the height a feed arrives at** (shelf + 6.4), not at the chute's own 7.2. The
+  0.8 mm between them is the lip, removed by lifting the run (§3.5.2); declaring the true height
+  instead would put the join half a layer out and the solver would refuse it.
+
+One consequence worth stating, because it cost a defect: the funnel is now *in* the network it is the
+reference for, and the network takes the largest demand in it - so without care the funnel rises with
+its feed and the step is exactly where it started. A part that asks for a lift never takes one.
 
 ### 3.6 Plates are generated, not modelled
 

@@ -42,7 +42,11 @@ namespace BlockMarbleRun.Grid
             {
                 float wanted = 0f;
 
-                if (part.HasPorts)
+                // A part that asks for a lift never takes one. It is the height everything else is
+                // being brought to, and lifting it as well - which is what happens once it is in the
+                // network, since the network takes the largest demand in it - restores the very step
+                // it asked about.
+                if (part.HasPorts && part.Definition.channelLipUnits <= 0f)
                     wanted = LiftFor(map, part);
 
                 if (part.LiftUnits != wanted)

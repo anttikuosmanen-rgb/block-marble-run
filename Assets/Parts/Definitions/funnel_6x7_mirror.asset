@@ -35,7 +35,12 @@ MonoBehaviour:
   topStuds: 000000000000000000000000000000000000000000000000000000000000000000000000010100000000
   bottomSockets: 000001010000000001010000010100000101010100000101000001010000010101010000010100000000
   rotation: 0
-  ports: []
+  ports:
+  - midlineHalfStuds: {x: 2, y: 12}
+    facing: 0
+    heightMm: 16.1
+    widthStuds: 2
+    profileMm: []
   centerline: []
   mirrorOf: funnel_6x7
   mirrorVerdict: 2

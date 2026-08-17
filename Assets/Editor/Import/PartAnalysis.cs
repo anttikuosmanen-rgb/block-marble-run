@@ -189,9 +189,13 @@ namespace BlockMarbleRun.EditorTools.Import
             a.DeriveLayerMasks(facets);
             a.DeriveTopStuds(facets);
             a.DeriveDropHole(facets);
-            a.DeriveColliderDrop(facets);
             a.DeriveBottomSockets(facets);
             a.DerivePorts(facets);
+
+            // After the ports, and not only because it adds one: DerivePorts clears the list, so a
+            // mouth emitted before it is thrown away - which it silently was. It also asks whether
+            // this part has perimeter mouths of its own, which is not answered until they are found.
+            a.DeriveColliderDrop(facets);
             a.DeriveTunnel(facets);
             a.DeriveChirality(facets);
 
@@ -644,6 +648,21 @@ namespace BlockMarbleRun.EditorTools.Import
             if (rise < ChannelFloorMm - 2f || rise > ChannelFloorMm + 4f)
                 return;
 
+            // The mouth the feed plugs into, at the boundary between the stud shelf and the chute.
+            //
+            // Inside the footprint rather than on its perimeter, which is unusual and is the whole
+            // shape of this junction: the feed stands on the shelf and pours inward, so the two parts
+            // overlap in plan instead of meeting edge to edge. Everything downstream reads ports the
+            // same way whether they sit on a boundary or not - what a port says is where a channel
+            // ends and which way it faces - so declaring it here is what gives a funnel channel
+            // snapping, an open-mouth marker when nothing is plugged in, and a place in a welded run.
+            //
+            // Declared at the height a feed arrives at, shelf + 6.4, not at the chute's own 7.2. The
+            // 0.8 mm between them is the lip, and it is taken out by lifting the run (ChannelNetwork)
+            // rather than by pretending the channels are at different heights, which would put the
+            // join half a layer out and refuse it.
+            EmitShelfPort(shelf, inward);
+
             float lip = chute - shelf - ChannelFloorMm;
 
             // Under a tenth of a millimetre is the moulding, not a step: the set's own channels
@@ -669,6 +688,68 @@ namespace BlockMarbleRun.EditorTools.Import
                     top = z;
 
             return float.IsNaN(top) ? float.NaN : top - MinMm.z;
+        }
+
+        /// <summary>
+        /// A mouth at the inner edge of the stud shelf, facing back over it, for a feed to meet.
+        /// </summary>
+        void EmitShelfPort(float shelfMm, Vector2 inward)
+        {
+            int minX = int.MaxValue, maxX = int.MinValue;
+            int minY = int.MaxValue, maxY = int.MinValue;
+
+            for (int cy = 0; cy < FootprintSize.y; cy++)
+            for (int cx = 0; cx < FootprintSize.x; cx++)
+            {
+                if (!TopStuds[cy * FootprintSize.x + cx])
+                    continue;
+
+                minX = Mathf.Min(minX, cx); maxX = Mathf.Max(maxX, cx);
+                minY = Mathf.Min(minY, cy); maxY = Mathf.Max(maxY, cy);
+            }
+
+            if (minX > maxX)
+                return;
+
+            // Facing back over the shelf: a channel opens the way a ball leaves it, and a ball
+            // arriving from the feed leaves the funnel's chute in the direction it fell from.
+            Facing facing = inward.y > 0.5f ? Facing.South
+                : inward.y < -0.5f ? Facing.North
+                : inward.x > 0.5f ? Facing.West
+                : Facing.East;
+
+            bool alongY = facing is Facing.West or Facing.East;
+
+            // The boundary between the shelf and the chute, which is the far side of the shelf from
+            // the way this mouth faces - the opposite of the perimeter convention in EmitPort, and
+            // for the opposite reason: a perimeter mouth faces out of the part from inside it, while
+            // this one faces out of the chute across a shelf that is still the funnel's own.
+            //
+            // Put on the outer edge instead, the mouth sits on the footprint boundary and a feed
+            // snaps up against the funnel rather than onto it, with the shelf left as a gap for the
+            // ball to fall into.
+            int across = facing switch
+            {
+                Facing.North => minY * 2,
+                Facing.South => (maxY + 1) * 2,
+                Facing.East => minX * 2,
+                _ => (maxX + 1) * 2,
+            };
+
+            int from = alongY ? minY : minX;
+            int width = (alongY ? maxY - minY : maxX - minX) + 1;
+            int centreAlong = from * 2 + width;
+
+            Ports.Add(new TrackPort
+            {
+                midlineHalfStuds = alongY
+                    ? new Vector2Int(across, centreAlong)
+                    : new Vector2Int(centreAlong, across),
+                facing = facing,
+                heightMm = shelfMm + ChannelFloorMm,
+                widthStuds = width,
+                profileMm = System.Array.Empty<float>(),
+            });
         }
 
         /// <summary>The commonest surface height within a radius, and the highest one, both above the base.</summary>
