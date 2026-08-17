@@ -62,7 +62,8 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestPointerTrustRecoversAfterAResolutionChange();
             TestFunnelsHaveADropHoleAndOthersDoNot();
             TestMirrorsKeepTheirDropHole();
-            TestOnlyFunnelsDropTheirCollider();
+            TestOnlyFunnelsAskForALift();
+            TestTheFeedRisesToMeetAFunnel();
             TestABowlIsNotMistakenForStuds();
             TestALiftedPillarIsRecutRatherThanStackedOn();
             TestALiftedScaffoldBrickBecomesAPillar();
@@ -813,7 +814,7 @@ namespace BlockMarbleRun.EditorTools.Tests
         /// stepped towards the middle of the part instead of along the shelf's own axis, crossed the
         /// bowl on the way, and produced a different answer for each of three identical junctions.
         /// </summary>
-        static void TestOnlyFunnelsDropTheirCollider()
+        static void TestOnlyFunnelsAskForALift()
         {
             foreach (string guid in AssetDatabase.FindAssets("t:PartDefinition"))
             {
@@ -825,21 +826,123 @@ namespace BlockMarbleRun.EditorTools.Tests
 
                 if (def.id.StartsWith("funnel"))
                 {
-                    // 0.75 mm, in world units where a unit is 10 cm.
-                    Check($"{def.id} drops its collider", def.colliderOffsetUnits < 0f,
-                          $"{def.colliderOffsetUnits * 100f:0.00} mm");
+                    // 0.8 mm, in world units where a unit is 10 cm.
+                    Check($"{def.id} asks its feed to rise", def.channelLipUnits > 0f,
+                          $"{def.channelLipUnits * 100f:0.00} mm");
 
-                    Check($"{def.id}'s drop is the measured 0.75 mm",
-                          Mathf.Abs(def.colliderOffsetUnits * 100f + 0.75f) < 0.1f,
-                          $"{-def.colliderOffsetUnits * 100f:0.00} mm");
+                    Check($"{def.id}'s lip is the measured 0.8 mm",
+                          Mathf.Abs(def.channelLipUnits * 100f - 0.8f) < 0.05f,
+                          $"{def.channelLipUnits * 100f:0.00} mm");
                 }
                 else
                 {
-                    Check($"{def.id} keeps its collider on its mesh",
-                          Mathf.Approximately(def.colliderOffsetUnits, 0f),
-                          $"{def.colliderOffsetUnits * 100f:0.00} mm");
+                    Check($"{def.id} asks nothing of what feeds it",
+                          Mathf.Approximately(def.channelLipUnits, 0f),
+                          $"{def.channelLipUnits * 100f:0.00} mm");
                 }
             }
+        }
+
+        /// <summary>
+        /// A run feeding a funnel rises to meet its chute, all the way along.
+        ///
+        /// The funnel measures its channel from the stud shelf a piece plugs onto rather than from its
+        /// own base, so a track standing on that shelf arrives 0.8 mm low and a ball moving on a nudge
+        /// stops there. The lift belongs to the whole joined run: raising only the piece that touches
+        /// the funnel would move the step back one joint, where it is just as solid and harder to see.
+        /// </summary>
+        static void TestTheFeedRisesToMeetAFunnel()
+        {
+            PartDefinition funnel = FindPart("funnel_6x7");
+            PartDefinition track = FindPart("track_2x2");
+
+            if (funnel == null || track == null)
+            {
+                Check("funnel and track are in the catalog", false);
+                return;
+            }
+
+            var map = new GridMap();
+            var placedFunnel = new PlacedPart(funnel, new GridCoord(0, 0, 0), 0, 0);
+
+            if (!map.Add(placedFunnel))
+            {
+                Check("the funnel places", false);
+                return;
+            }
+
+            // Onto the shelf: the column of one of the funnel's studs, at the layer above it.
+            var shelf = new Vector2Int(-1, -1);
+
+            for (int y = 0; y < funnel.footprintSize.y && shelf.x < 0; y++)
+            for (int x = 0; x < funnel.footprintSize.x; x++)
+            {
+                if (!placedFunnel.HasTopStudAt(x, y))
+                    continue;
+
+                shelf = new Vector2Int(x, y);
+                break;
+            }
+
+            Check("the funnel offers a shelf", shelf.x >= 0);
+
+            if (shelf.x < 0)
+                return;
+
+            int layer = placedFunnel.TopLayerAt(shelf.x, shelf.y);
+            var feed = new PlacedPart(track, new GridCoord(shelf.x, shelf.y, layer), 0, 0);
+
+            if (!map.Add(feed))
+            {
+                Check("a track plugs onto the shelf", false, $"at {shelf} layer {layer}");
+                return;
+            }
+
+            ChannelNetwork.Recompute(map);
+
+            Check("the piece on the shelf rises", feed.LiftUnits > 0f,
+                  $"{feed.LiftUnits * 100f:0.00} mm");
+
+            Check("by the funnel's lip", Mathf.Approximately(feed.LiftUnits, funnel.channelLipUnits),
+                  $"{feed.LiftUnits * 100f:0.00} against {funnel.channelLipUnits * 100f:0.00} mm");
+
+            // The next piece along, joined to the first but standing on nothing at all.
+            var second = new PlacedPart(track, new GridCoord(shelf.x, shelf.y + 2, layer), 0, 0);
+
+            if (map.Add(second))
+            {
+                ChannelNetwork.Recompute(map);
+
+                Check("and so does the piece joined to it",
+                      Mathf.Approximately(second.LiftUnits, feed.LiftUnits),
+                      $"{second.LiftUnits * 100f:0.00} mm");
+            }
+
+            // Somewhere else entirely: nothing to do with the funnel, so nothing to rise for.
+            var elsewhere = new PlacedPart(track, new GridCoord(20, 20, 0), 0, 0);
+
+            if (map.Add(elsewhere))
+            {
+                ChannelNetwork.Recompute(map);
+
+                Check("a run of its own stays where it is",
+                      Mathf.Approximately(elsewhere.LiftUnits, 0f),
+                      $"{elsewhere.LiftUnits * 100f:0.00} mm");
+            }
+        }
+
+        static PartDefinition FindPart(string id)
+        {
+            foreach (string guid in AssetDatabase.FindAssets("t:PartDefinition"))
+            {
+                var def = AssetDatabase.LoadAssetAtPath<PartDefinition>(
+                    AssetDatabase.GUIDToAssetPath(guid));
+
+                if (def != null && def.id == id)
+                    return def;
+            }
+
+            return null;
         }
 
         static void Check(string what, bool condition, string detail = null)

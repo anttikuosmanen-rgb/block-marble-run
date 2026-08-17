@@ -31,7 +31,7 @@ MonoBehaviour:
   hasTunnel: 1
   dropHoleOffsetUnits: {x: 0, y: 0}
   dropHoleRadiusUnits: 0
-  colliderOffsetUnits: -0
+  channelLipUnits: 0
   topStuds: 00000000000000000000000000000000
   bottomSockets: 00000001000000010000000001010000
   rotation: 0

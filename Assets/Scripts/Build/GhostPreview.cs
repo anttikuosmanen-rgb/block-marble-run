@@ -14,6 +14,14 @@ namespace BlockMarbleRun.Build
     {
         public Material ghostMaterial;
 
+        /// <summary>
+        /// The build being placed into, for previewing a piece at the height it will settle at.
+        ///
+        /// A piece feeding a funnel rises to meet its chute (ChannelNetwork). Without the map the
+        /// ghost would draw it in its cell and the piece would hop the moment it was released.
+        /// </summary>
+        public Grid.GridMap Map { get; set; }
+
         [SerializeField] Color validTint = new Color(0.35f, 1f, 0.45f, 0.5f);
         [SerializeField] Color blockedTint = new Color(1f, 0.3f, 0.25f, 0.5f);
 
@@ -44,6 +52,11 @@ namespace BlockMarbleRun.Build
                 Hide();
                 return;
             }
+
+            // At the height it will settle at, not at the height its cell implies: a piece feeding a
+            // funnel rises to meet the chute (ChannelNetwork), and a ghost that ignored that would
+            // hop the moment the button was released.
+            part.LiftUnits = Map != null ? ChannelNetwork.LiftFor(Map, part) : 0f;
 
             _filter.sharedMesh = part.Definition.mesh;
 

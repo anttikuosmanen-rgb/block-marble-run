@@ -648,7 +648,10 @@ namespace BlockMarbleRun.EditorTools.Import
 
             // Under a tenth of a millimetre is the moulding, not a step: the set's own channels
             // measure 6.30 to 6.38 against a nominal 6.4.
-            ColliderDropMm = Mathf.Abs(lip) < 0.15f ? 0f : lip;
+            // Rounded up to a tenth of a millimetre. The measurement is 0.75; lifting 0.8 leaves the
+            // ball arriving a twentieth of a millimetre high, which is a fall in the direction it is
+            // already travelling rather than a step against it.
+            ColliderDropMm = Mathf.Abs(lip) < 0.15f ? 0f : Mathf.Ceil(lip * 10f) / 10f;
 
             if (ColliderDropMm != 0f)
                 Warnings.Add($"Channel sits {chute - shelf:0.0} mm above its stud shelf where the set " +

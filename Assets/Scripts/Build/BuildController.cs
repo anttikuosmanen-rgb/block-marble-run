@@ -76,9 +76,12 @@ namespace BlockMarbleRun.Build
                 _selection?.Clear();
 
             CurrentTool = tool;
+
             if (tool != Tool.Place)
+            {
                 ghost.Hide();
                 guides?.Hide();
+            }
         }
 
         public int SelectedIndex => _partIndex;
@@ -1305,6 +1308,7 @@ namespace BlockMarbleRun.Build
             bool needsGrowth = candidate.Origin.layer < 0;
             GrowthLayers = needsGrowth ? -candidate.Origin.layer : 0;
 
+            ghost.Map = Map;
             ghost.Show(candidate, needsGrowth ? PlacementResult.Unsupported : result,
                 factory.Catalog.ColorAt(_colorIndex));
 

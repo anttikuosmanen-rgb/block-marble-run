@@ -341,6 +341,15 @@ namespace BlockMarbleRun.Grid
         /// World transform for the rendered mesh. Meshes are modelled centred on their footprint with
         /// the base at zero, so the part sits at the centre of the cells it occupies.
         /// </summary>
+        /// <summary>
+        /// Extra height this piece is drawn and collided at, in world units, set by ChannelNetwork.
+        ///
+        /// Not part of the grid: the piece still occupies the cells it always did and clutches what
+        /// it always clutched. This is the difference between where a channel would sit and where it
+        /// has to sit to meet the one it is joined to.
+        /// </summary>
+        public float LiftUnits { get; set; }
+
         public void GetTransform(out Vector3 position, out Quaternion rotation)
         {
             Vector2Int size = RotatedSize;
@@ -362,6 +371,11 @@ namespace BlockMarbleRun.Grid
 
             // Lifted for parts that stand on the studs rather than between them.
             position.y += Definition.verticalOffsetUnits;
+
+            // And whatever the channel network asked of this piece: a run that feeds a funnel rises
+            // to meet its chute, and every piece joined to that run rises with it so the run stays
+            // flush with itself. See ChannelNetwork.
+            position.y += LiftUnits;
         }
     }
 }

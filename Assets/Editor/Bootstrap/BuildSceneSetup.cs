@@ -136,6 +136,11 @@ namespace BlockMarbleRun.EditorTools.Bootstrap
             joints.controller = controller;
             joints.factory = factory;
 
+            // Before the welder in the file as in effect: what gets welded is where the lifter has
+            // put it.
+            var lifter = systems.AddComponent<BlockMarbleRun.Track.ChannelLifter>();
+            lifter.controller = controller;
+
             var welder = systems.AddComponent<BlockMarbleRun.Track.ChannelWelder>();
             welder.controller = controller;
             welder.factory = factory;

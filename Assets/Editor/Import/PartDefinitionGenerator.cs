@@ -186,8 +186,9 @@ namespace BlockMarbleRun.EditorTools.Import
 
             def.dropHoleRadiusUnits = analysis.DropHoleRadiusMm * 0.01f;
 
-            // Negative: the collider sits below the mesh (PartDefinition.colliderOffsetUnits).
-            def.colliderOffsetUnits = -analysis.ColliderDropMm * 0.01f;
+            // What a channel feeding this part has to climb to meet it (channelLipUnits). Nothing is
+            // moved here: the lift goes on the run at build time, in ChannelNetwork.
+            def.channelLipUnits = analysis.ColliderDropMm * 0.01f;
             def.layerMasks = analysis.LayerMasks;
             def.topStuds = analysis.TopStuds;
 
@@ -271,7 +272,7 @@ namespace BlockMarbleRun.EditorTools.Import
             def.hasTunnel = source.hasTunnel;
             def.dropHoleOffsetUnits = source.dropHoleOffsetUnits;
             def.dropHoleRadiusUnits = source.dropHoleRadiusUnits;
-            def.colliderOffsetUnits = source.colliderOffsetUnits;
+            def.channelLipUnits = source.channelLipUnits;
             def.ports = source.ports;
             def.centerline = source.centerline;
             // A plate is as handed as the brick it came from, which is to say not at all - and
@@ -351,9 +352,8 @@ namespace BlockMarbleRun.EditorTools.Import
             def.dropHoleOffsetUnits = new Vector2(-source.dropHoleOffsetUnits.x,
                                                   source.dropHoleOffsetUnits.y);
             def.dropHoleRadiusUnits = source.dropHoleRadiusUnits;
+            def.channelLipUnits = source.channelLipUnits;
 
-            // A mirror is the same part reflected, so it sits at the same height as its source.
-            def.colliderOffsetUnits = source.colliderOffsetUnits;
 
             def.footprintMask = MirrorBuilder.MirrorMask(source.footprintMask, source.footprintSize);
             def.layerMasks = MirrorBuilder.MirrorLayerMasks(source.layerMasks, source.footprintSize,

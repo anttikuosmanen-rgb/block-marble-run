@@ -171,19 +171,22 @@ namespace BlockMarbleRun.Parts
         public float dropHoleRadiusUnits;
 
         /// <summary>
-        /// How far below the drawn mesh this part's collision geometry sits, in world units.
+        /// How far a channel feeding this part has to rise to meet it, in world units.
         ///
-        /// The funnels carry their chute 7.1 mm above the stud shelf an incoming piece plugs onto,
-        /// where every other part carries its channel 6.4 mm above its own base. A ball arriving from
-        /// a track on that shelf therefore has 0.7 mm to climb, and a slow one stops against it.
-        /// Dropping the whole collider by the difference makes the two continuous.
+        /// Non-zero only for a part whose channel is referenced to a stud shelf rather than to its own
+        /// base: the funnels run their chute 7.2 mm above the shelf an incoming piece plugs onto,
+        /// where the rest of the set carries its channel 6.4 mm above its base. A track standing on
+        /// that shelf therefore delivers its ball 0.75 mm below the chute, and a ball moving on a
+        /// nudge stops against the step.
         ///
-        /// The whole collider, not the chute alone: the funnel's chute, cone and throat keep their
-        /// relationship to each other, so no new step appears inside the piece where a ball is
-        /// committed and slow. What moves is the funnel against the world, by a fraction of a
-        /// millimetre, and only in collision - the mesh is drawn exactly where it was.
+        /// Recorded here rather than fixed in the geometry because neither piece is wrong. Lowering
+        /// the funnel puts its skirt through the brick beneath it; lowering only its collider leaves
+        /// the ball resting inside the visible funnel, which then draws over the ball. Lifting the
+        /// channel that feeds it moves a piece away from what it stands on, which shows nothing but a
+        /// hairline. See ChannelNetwork, which spreads the lift along the whole joined run so the run
+        /// stays flush with itself.
         /// </summary>
-        public float colliderOffsetUnits;
+        public float channelLipUnits;
 
         [Tooltip("Row-major: which cells expose a stud on top. Empty means nothing can stack on this part.")]
         public bool[] topStuds;

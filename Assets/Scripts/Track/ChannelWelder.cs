@@ -167,23 +167,12 @@ namespace BlockMarbleRun.Track
                     return;
                 }
 
-                // From the collider's own transform, not the part's. A part with a collider offset
-                // (PartDefinition.colliderOffsetUnits) keeps its collision below its mesh, and welding
-                // from the part's transform would put back the very step the offset removes - in play
-                // mode only, which is exactly where it would be hardest to account for.
-                Transform frame = part.Instance.transform;
-
-                if (part.Definition.colliderOffsetUnits != 0f)
-                {
-                    Transform carrier = part.Instance.transform.Find("Colliders");
-                    if (carrier != null)
-                        frame = carrier;
-                }
-
+                // The part's own transform, which carries any lift the channel network gave it
+                // (ChannelNetwork) - so a welded run is welded where it is drawn.
                 combines.Add(new CombineInstance
                 {
                     mesh = mesh,
-                    transform = frame.localToWorldMatrix,
+                    transform = part.Instance.transform.localToWorldMatrix,
                 });
 
                 // Suppress rather than destroy: the part keeps its collider for when welding is turned

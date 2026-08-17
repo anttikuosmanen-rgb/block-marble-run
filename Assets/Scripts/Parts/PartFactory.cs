@@ -201,17 +201,6 @@ namespace BlockMarbleRun.Parts
         {
             PartDefinition def = part.Definition;
 
-            // A part whose collision sits lower than its mesh gets a child to hold it, so the drawn
-            // geometry stays exactly where it is. See PartDefinition.colliderOffsetUnits: the funnels
-            // carry their chute above a stud shelf rather than above their own base, and the fraction
-            // of a millimetre that leaves at the junction is enough to stop a slow ball.
-            if (def.colliderOffsetUnits != 0f)
-            {
-                var carrier = new GameObject("Colliders");
-                carrier.transform.SetParent(go.transform, false);
-                carrier.transform.localPosition = new Vector3(0f, def.colliderOffsetUnits, 0f);
-                go = carrier;
-            }
 
             // A tunnelled part needs its real geometry too: a bridge modelled as a solid box
             // walls in the very ball it is meant to arch over.
