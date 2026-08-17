@@ -120,6 +120,20 @@ namespace BlockMarbleRun.EditorTools.Import
         /// </summary>
         public const float ChannelFloorMm = 6.4f;
 
+        /// <summary>
+        /// How far below the drawn mesh this part's collider should sit, in millimetres.
+        ///
+        /// Non-zero only for a part whose channel is referenced to a stud shelf rather than to its own
+        /// base - the funnels, whose chute runs 7.1 mm above the shelf an incoming piece plugs onto
+        /// where every other part carries its channel 6.4 mm above its base. The 0.7 mm difference is
+        /// a step up at the junction, and a slow ball stops against it.
+        ///
+        /// Fixed in the collider rather than in the grid because that is where the ball is: dropping
+        /// the collision geometry by the difference makes the two channels continuous, and 0.7 mm of
+        /// collider-to-mesh disagreement is a fifth of a millimetre at the scale anything is drawn at.
+        /// </summary>
+        public float ColliderDropMm;
+
         public readonly List<string> Warnings = new();
 
         /// <summary>
@@ -175,6 +189,7 @@ namespace BlockMarbleRun.EditorTools.Import
             a.DeriveLayerMasks(facets);
             a.DeriveTopStuds(facets);
             a.DeriveDropHole(facets);
+            a.DeriveColliderDrop(facets);
             a.DeriveBottomSockets(facets);
             a.DerivePorts(facets);
             a.DeriveTunnel(facets);
@@ -545,6 +560,147 @@ namespace BlockMarbleRun.EditorTools.Import
             ScanEdge(height, w, h, Facing.East, inset);
             ScanEdge(height, w, h, Facing.South, inset);
             ScanEdge(height, w, h, Facing.North, inset);
+        }
+
+        /// <summary>
+        /// Measures a channel that is referenced to a stud shelf instead of to the part's own base.
+        ///
+        /// The funnels are built this way: an incoming piece plugs onto a two-stud shelf, and the
+        /// chute it feeds runs above that shelf rather than above the funnel's floor. Everything else
+        /// in the set carries its channel 6.4 mm above its own base, and a piece standing on the shelf
+        /// therefore arrives 0.7 mm below the chute - a step up, at the one place a ball is at its
+        /// slowest, and it stops there.
+        ///
+        /// Measured rather than written down, and measured from the two surfaces that actually meet:
+        /// the shelf the incoming piece stands on, and the flat the ball runs onto.
+        /// </summary>
+        void DeriveColliderDrop(List<StlFacet> facets)
+        {
+            ColliderDropMm = 0f;
+
+            // Only for a part with studs and no channel mouths of its own. A part with ports carries
+            // its channels at its own base like everything else, and a plain brick has studs but
+            // nothing inward of them to run onto.
+            if (TopStuds == null || Ports.Count > 0)
+                return;
+
+            float sx = 0f, sy = 0f;
+            int studs = 0;
+
+            for (int cy = 0; cy < FootprintSize.y; cy++)
+            for (int cx = 0; cx < FootprintSize.x; cx++)
+            {
+                if (!TopStuds[cy * FootprintSize.x + cx])
+                    continue;
+
+                sx += (cx + 0.5f) * StudPitchMm;
+                sy += (cy + 0.5f) * StudPitchMm;
+                studs++;
+            }
+
+            if (studs == 0)
+                return;
+
+            sx /= studs;
+            sy /= studs;
+
+            // The shelf: the plateau the studs stand on, taken as the commonest height under them
+            // rather than as the stud tops less a nominal stud, which assumes a moulding these were
+            // not made to.
+            float shelf = Plateau(facets, sx, sy, StudPitchMm * 0.5f, out _);
+
+            if (float.IsNaN(shelf))
+                return;
+
+            // Inward along the shelf's own axis, not towards the middle of the part. A shelf in a
+            // corner has the centre diagonally from it, and a diagonal walk crosses the bowl's slope
+            // rather than the chute - which read a different height on each of the three funnels and
+            // was the tell that the direction, not the geometry, was wrong.
+            var toCentre = new Vector2(FootprintSize.x * StudPitchMm * 0.5f - sx,
+                                       FootprintSize.y * StudPitchMm * 0.5f - sy);
+
+            if (toCentre.sqrMagnitude < 1f)
+                return;
+
+            Vector2 inward = Mathf.Abs(toCentre.x) > Mathf.Abs(toCentre.y)
+                ? new Vector2(Mathf.Sign(toCentre.x), 0f)
+                : new Vector2(0f, Mathf.Sign(toCentre.y));
+
+            // Two studs in, which clears the shelf and its lip on every funnel in the set, and read
+            // as a plateau rather than as one sample: a single reading can land on a rib.
+            float chute = Plateau(facets,
+                                  sx + inward.x * StudPitchMm * 2f,
+                                  sy + inward.y * StudPitchMm * 2f,
+                                  StudPitchMm * 0.4f, out _);
+
+            if (float.IsNaN(chute))
+                return;
+
+            // A channel floor's worth above the shelf, give or take. Outside that band what was found
+            // is the top of the part, the inside of a wall, or the shelf itself continuing - all of
+            // which mean this part simply does not have a shelf-referenced channel.
+            float rise = chute - shelf;
+
+            if (rise < ChannelFloorMm - 2f || rise > ChannelFloorMm + 4f)
+                return;
+
+            float lip = chute - shelf - ChannelFloorMm;
+
+            // Under a tenth of a millimetre is the moulding, not a step: the set's own channels
+            // measure 6.30 to 6.38 against a nominal 6.4.
+            ColliderDropMm = Mathf.Abs(lip) < 0.15f ? 0f : lip;
+
+            if (ColliderDropMm != 0f)
+                Warnings.Add($"Channel sits {chute - shelf:0.0} mm above its stud shelf where the set " +
+                             $"uses {ChannelFloorMm:0.0}; collider dropped {ColliderDropMm:0.00} mm so a " +
+                             "ball does not have to climb into it.");
+        }
+
+        /// <summary>Top surface at a point given in millimetres from the part's minimum corner.</summary>
+        float TopRelative(List<StlFacet> facets, float x, float y)
+        {
+            float top = float.NaN;
+
+            foreach (StlFacet f in facets)
+                if (Covers(f, MinMm.x + x, MinMm.y + y, out float z) && (float.IsNaN(top) || z > top))
+                    top = z;
+
+            return float.IsNaN(top) ? float.NaN : top - MinMm.z;
+        }
+
+        /// <summary>The commonest surface height within a radius, and the highest one, both above the base.</summary>
+        float Plateau(List<StlFacet> facets, float atX, float atY, float radiusMm, out float highest)
+        {
+            highest = float.NaN;
+
+            var bins = new Dictionary<int, int>();
+            float best = float.NaN;
+            int bestCount = 0;
+
+            for (float dx = -radiusMm; dx <= radiusMm; dx += 0.5f)
+            for (float dy = -radiusMm; dy <= radiusMm; dy += 0.5f)
+            {
+                float top = TopRelative(facets, atX + dx, atY + dy);
+                if (float.IsNaN(top))
+                    continue;
+
+                if (float.IsNaN(highest) || top > highest)
+                    highest = top;
+
+                // Fine bins: at a fifth of a millimetre the answer quantises to the bin, and the
+                // three funnels - identical in this region - came out 0.2 mm apart because of it.
+                int bin = Mathf.RoundToInt(top / 0.05f);
+                int n = bins.TryGetValue(bin, out int had) ? had + 1 : 1;
+                bins[bin] = n;
+
+                if (n > bestCount)
+                {
+                    bestCount = n;
+                    best = bin * 0.05f;
+                }
+            }
+
+            return best;
         }
 
         /// <summary>
@@ -1085,7 +1241,8 @@ namespace BlockMarbleRun.EditorTools.Import
                         lowest = Mathf.Min(lowest, value);
                     }
 
-                    isChannel = !float.IsPositiveInfinity(lowest) && IsChannelFloor(lowest, out snapped);
+                    isChannel = !float.IsPositiveInfinity(lowest) && IsChannelFloor(lowest, out snapped) &&
+                                HasWallBesideIt(snapped);
                 }
 
                 // A run also breaks when the height steps, which keeps two mouths at different
@@ -1190,10 +1347,25 @@ namespace BlockMarbleRun.EditorTools.Import
         /// </summary>
         static bool IsChannelFloor(float measured, out float snapped)
         {
-            int layer = Mathf.RoundToInt((measured - ChannelFloorMm) / BrickPitchMm);
-            snapped = layer * BrickPitchMm + ChannelFloorMm;
+            return SitsAt(measured, ChannelFloorMm, ChannelToleranceMm, out snapped);
+        }
 
-            return layer >= 0 && Mathf.Abs(measured - snapped) <= ChannelToleranceMm;
+        /// <summary>
+        /// Whether a candidate floor has enough part above it to be a mouth rather than an open top.
+        ///
+        /// A mouth is a gap in a wall, so there has to be a wall: at least one layer of part standing
+        /// above the floor. Without this the funnels' bowl rims came out as mouths - the rim sits at
+        /// 28.4 mm and the raised family allows 9.6 + 19.2 = 28.8, so the whole open top of the bowl
+        /// read as a channel two millimetres wide of the truth.
+        /// </summary>
+        bool HasWallBesideIt(float floorMm) => SizeMm.z - floorMm >= LayerHeightMm - 0.8f;
+
+        static bool SitsAt(float measured, float floorMm, float toleranceMm, out float snapped)
+        {
+            int layer = Mathf.RoundToInt((measured - floorMm) / BrickPitchMm);
+            snapped = layer * BrickPitchMm + floorMm;
+
+            return layer >= 0 && Mathf.Abs(measured - snapped) <= toleranceMm;
         }
 
         /// <summary>

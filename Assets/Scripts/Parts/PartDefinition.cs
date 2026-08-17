@@ -170,6 +170,21 @@ namespace BlockMarbleRun.Parts
 
         public float dropHoleRadiusUnits;
 
+        /// <summary>
+        /// How far below the drawn mesh this part's collision geometry sits, in world units.
+        ///
+        /// The funnels carry their chute 7.1 mm above the stud shelf an incoming piece plugs onto,
+        /// where every other part carries its channel 6.4 mm above its own base. A ball arriving from
+        /// a track on that shelf therefore has 0.7 mm to climb, and a slow one stops against it.
+        /// Dropping the whole collider by the difference makes the two continuous.
+        ///
+        /// The whole collider, not the chute alone: the funnel's chute, cone and throat keep their
+        /// relationship to each other, so no new step appears inside the piece where a ball is
+        /// committed and slow. What moves is the funnel against the world, by a fraction of a
+        /// millimetre, and only in collision - the mesh is drawn exactly where it was.
+        /// </summary>
+        public float colliderOffsetUnits;
+
         [Tooltip("Row-major: which cells expose a stud on top. Empty means nothing can stack on this part.")]
         public bool[] topStuds;
 

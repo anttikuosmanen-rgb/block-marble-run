@@ -167,15 +167,30 @@ namespace BlockMarbleRun.Track
                     return;
                 }
 
+                // From the collider's own transform, not the part's. A part with a collider offset
+                // (PartDefinition.colliderOffsetUnits) keeps its collision below its mesh, and welding
+                // from the part's transform would put back the very step the offset removes - in play
+                // mode only, which is exactly where it would be hardest to account for.
+                Transform frame = part.Instance.transform;
+
+                if (part.Definition.colliderOffsetUnits != 0f)
+                {
+                    Transform carrier = part.Instance.transform.Find("Colliders");
+                    if (carrier != null)
+                        frame = carrier;
+                }
+
                 combines.Add(new CombineInstance
                 {
                     mesh = mesh,
-                    transform = part.Instance.transform.localToWorldMatrix,
+                    transform = frame.localToWorldMatrix,
                 });
 
                 // Suppress rather than destroy: the part keeps its collider for when welding is turned
                 // off again, and nothing else has to know this happened.
-                foreach (Collider collider in part.Instance.GetComponents<Collider>())
+                // In children too: an offset part carries its colliders on one, and leaving those
+                // live would have the run collided against twice, once at each height.
+                foreach (Collider collider in part.Instance.GetComponentsInChildren<Collider>())
                 {
                     if (!collider.enabled)
                         continue;

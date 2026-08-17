@@ -62,6 +62,7 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestPointerTrustRecoversAfterAResolutionChange();
             TestFunnelsHaveADropHoleAndOthersDoNot();
             TestMirrorsKeepTheirDropHole();
+            TestOnlyFunnelsDropTheirCollider();
             TestABowlIsNotMistakenForStuds();
             TestALiftedPillarIsRecutRatherThanStackedOn();
             TestALiftedScaffoldBrickBecomesAPillar();
@@ -798,6 +799,46 @@ namespace BlockMarbleRun.EditorTools.Tests
                 Check($"{def.id}'s hole is mirrored in x",
                       Mathf.Approximately(def.dropHoleOffsetUnits.x, -source.dropHoleOffsetUnits.x) &&
                       Mathf.Approximately(def.dropHoleOffsetUnits.y, source.dropHoleOffsetUnits.y));
+            }
+        }
+
+        /// <summary>
+        /// Only the funnels sit their collider below their mesh, and by the measured amount.
+        ///
+        /// The funnels carry their chute 7.2 mm above the stud shelf an incoming piece plugs onto,
+        /// where the rest of the set carries its channel 6.4 mm above its own base. A ball arriving
+        /// from a track on that shelf has the difference to climb, and a slow one stops against it.
+        ///
+        /// The test is here because the derivation walks geometry to find it: an earlier version
+        /// stepped towards the middle of the part instead of along the shelf's own axis, crossed the
+        /// bowl on the way, and produced a different answer for each of three identical junctions.
+        /// </summary>
+        static void TestOnlyFunnelsDropTheirCollider()
+        {
+            foreach (string guid in AssetDatabase.FindAssets("t:PartDefinition"))
+            {
+                var def = AssetDatabase.LoadAssetAtPath<PartDefinition>(
+                    AssetDatabase.GUIDToAssetPath(guid));
+
+                if (def == null)
+                    continue;
+
+                if (def.id.StartsWith("funnel"))
+                {
+                    // 0.75 mm, in world units where a unit is 10 cm.
+                    Check($"{def.id} drops its collider", def.colliderOffsetUnits < 0f,
+                          $"{def.colliderOffsetUnits * 100f:0.00} mm");
+
+                    Check($"{def.id}'s drop is the measured 0.75 mm",
+                          Mathf.Abs(def.colliderOffsetUnits * 100f + 0.75f) < 0.1f,
+                          $"{-def.colliderOffsetUnits * 100f:0.00} mm");
+                }
+                else
+                {
+                    Check($"{def.id} keeps its collider on its mesh",
+                          Mathf.Approximately(def.colliderOffsetUnits, 0f),
+                          $"{def.colliderOffsetUnits * 100f:0.00} mm");
+                }
             }
         }
 

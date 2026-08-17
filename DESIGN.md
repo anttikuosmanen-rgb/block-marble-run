@@ -342,6 +342,30 @@ a **24.5 mm** ball. The funnels' throats are **28 mm** and round. So the test is
 the shaft against the ball's diameter, with an aspect check so a long slot cannot creep in on width
 alone. Measuring "is there material above it" separates neither: there is none in either case.
 
+### 3.5.2 A channel measured from a shelf, not from the base
+
+Every part in the set carries its channel floor 6.4 mm above its own base - except the funnels, which
+carry theirs **7.2 mm above the stud shelf an incoming piece plugs onto**. A track piece standing on
+that shelf arrives 0.75 mm below the chute, and a ball at the slowest point of its run stops against
+the step.
+
+Measuring it took two wrong answers first, both worth recording. Comparing the funnel's chute to its
+own base gave 3.2 mm and made it look like a different channel convention; the funnel's reference
+surface is the shelf, so that comparison was between two different planes. Then the automatic
+derivation walked inward from the shelf *towards the middle of the part*, which on a corner shelf is
+diagonal, crossed the bowl's slope, and returned a different answer for each of three identical
+junctions - the disagreement between the funnels was the tell, since the geometry is the same.
+
+**The fix is in the collider, not in the grid.** `colliderOffsetUnits` drops a part's collision
+geometry below its drawn mesh, and the funnels drop by the measured 0.75 mm, which makes the two
+channels continuous. The whole collider moves, chute and cone and throat together: dropping the chute
+alone would move the step to where the chute meets the cone, which is inside the piece, where a ball
+is committed and slow. What moves is the funnel against the world, by three quarters of a millimetre,
+and only in collision - the mesh is drawn exactly where it was.
+
+Welding (§7.1) has to know about it, or the step comes back in play mode alone: the welded run is
+built from each part's collider transform rather than from the part's own.
+
 ### 3.6 Plates are generated, not modelled
 
 A plate is a brick with the middle 9.6 mm removed. Cutting one out of the block mesh gives six parts
