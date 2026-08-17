@@ -1,22 +1,34 @@
 name: Build
 
-# Automatic runs are off. The workflow needs a Unity licence in the repository secrets
-# (UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD) and there is none, so every push failed within
-# twenty seconds - a red mark on each commit that says nothing about the commit. Left here rather
-# than deleted because the build steps are correct and it is the licence that is missing: add the
-# secrets, restore the push and pull_request triggers below, and it runs.
+# On demand only, on a self-hosted runner on the author's own Mac.
 #
-#   on:
-#     push:
-#       branches: [main]
-#     pull_request:
-#     workflow_dispatch:
+# The hosted path is closed rather than merely unconfigured: game-ci/unity-builder runs the editor in
+# Docker and needs a licence in the repository secrets, and Unity has retired manual activation for
+# Personal licences - the portal now accepts a Plus/Pro serial and nothing else, and a Unity 6
+# Personal entitlement has neither a serial nor a .ulf to give it. So there is no licence to put in a
+# secret, and no amount of workflow work produces one.
+#
+# The machine that already has an activated editor builds instead. No secrets, no Docker, no licence
+# handling at all - and the workspace persists between runs, so Library/ stays warm without a cache
+# step, which was the single biggest cost of the hosted version.
+#
+# Start the runner when you want it, stop it when you are done:
+#
+#   ~/actions-runner/run.sh          (Ctrl-C to stop; it is not installed as a service)
+#
+# then Actions -> Build -> Run workflow. A run queued while the runner is down simply waits.
 on:
   workflow_dispatch:
-
-# DESIGN.md §10: keeping the WebGL build green from M0 is deliberate. WebGL failures
-# (heap exhaustion, stripping breaking serialization, plugin gaps) surface as late
-# failures that can force architectural rework, so they are caught per-commit.
+    inputs:
+      targets:
+        description: What to build
+        type: choice
+        default: webgl
+        options: [webgl, macos, all]
+      deploy_pages:
+        description: Deploy the Pages build afterwards
+        type: boolean
+        default: false
 
 concurrency:
   group: build-${{ github.ref }}
@@ -25,83 +37,65 @@ concurrency:
 jobs:
   build:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    # The Mac itself. `unity` is the label that says an activated editor lives here, so a future
+    # runner elsewhere does not silently pick up a job it cannot serve.
+    runs-on: [self-hosted, macOS, unity]
     strategy:
       fail-fast: false
       matrix:
         include:
           # Self-hosted: server can send Content-Encoding: br, so no JS decompressor ships.
           - name: WebGL (self-host)
-            targetPlatform: WebGL
+            group: webgl
             buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildWebGLSelfHost
             artifact: webgl-selfhost
+            path: build/webgl-selfhost
           # GitHub Pages cannot set response headers, so the fallback decompressor is required.
           - name: WebGL (Pages)
-            targetPlatform: WebGL
+            group: webgl
             buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildWebGLPages
             artifact: webgl-pages
+            path: build/webgl-pages
+          - name: macOS
+            group: macos
+            buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildMacOS
+            artifact: macos
+            path: build/macos
 
     steps:
       - uses: actions/checkout@v4
 
-      # Library/ is the single biggest CI cost: without it every run re-imports all 20 STLs.
-      - uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: |
-            Library-${{ matrix.targetPlatform }}-
-            Library-
+      - name: Build
+        run: |
+          set -euo pipefail
 
-      - uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          targetPlatform: ${{ matrix.targetPlatform }}
-          buildMethod: ${{ matrix.buildMethod }}
-          allowDirtyBuild: true
+          # Read the editor version from the project rather than pinning it here, so upgrading Unity
+          # does not need this file edited as well.
+          version=$(awk '/^m_EditorVersion:/ { print $2 }' ProjectSettings/ProjectVersion.txt)
+          unity="/Applications/Unity/Hub/Editor/$version/Unity.app/Contents/MacOS/Unity"
+
+          if [ ! -x "$unity" ]; then
+            echo "No editor at $unity - install $version through Unity Hub." >&2
+            exit 1
+          fi
+
+          # -logFile - puts the editor log in the step output, which is the only way to see why a
+          # batchmode build failed. -nographics is safe here: nothing renders during a build.
+          "$unity" -projectPath "$PWD" -batchmode -nographics -quit \
+            -logFile - -executeMethod ${{ matrix.buildMethod }}
+        if: inputs.targets == 'all' || inputs.targets == matrix.group
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: build/${{ matrix.artifact }}
-
-  # macOS needs a mac runner; kept separate so a mac-runner outage cannot block the
-  # WebGL builds, which are the ones guarding the risky target.
-  build-macos:
-    name: macOS
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/cache@v4
-        with:
-          path: Library
-          key: Library-macOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
-          restore-keys: Library-macOS-
-
-      - uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-        with:
-          targetPlatform: StandaloneOSX
-          buildMethod: BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildMacOS
-          allowDirtyBuild: true
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos
-          path: build/macos
+          path: ${{ matrix.path }}
+        if: inputs.targets == 'all' || inputs.targets == matrix.group
 
   deploy-pages:
     name: Deploy to Pages
     needs: build
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    if: inputs.deploy_pages && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macOS, unity]
     permissions:
       pages: write
       id-token: write

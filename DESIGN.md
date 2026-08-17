@@ -837,21 +837,23 @@ GitHub Pages cannot set response headers, so without the decompression fallback 
 
 Ship both from one CI job (`unity-builder` GitHub Action): `webgl-selfhost`, `webgl-pages` (auto-deployed to Pages on green), `macos` (Apple Silicon / Universal, Metal). Pages doubles as the always-current playable link for testing on other machines.
 
-**CI is currently disabled, and this is a licence problem rather than a build problem.**
-`game-ci/unity-builder` runs the editor headless in a Docker image and needs a Unity licence in the
-repository secrets — `UNITY_LICENSE` (the `.ulf` contents), `UNITY_EMAIL`, `UNITY_PASSWORD`. There are
-none, so every push failed within twenty seconds: a red mark on each commit that says nothing about
-the commit, which is worse than no signal at all. The workflow is kept intact with only
-`workflow_dispatch` as its trigger; adding the secrets and restoring the `push` / `pull_request`
-triggers is all that is needed to turn it back on.
+**CI runs on a self-hosted runner, on demand.** The hosted path is not merely unconfigured, it is
+closed: `game-ci/unity-builder` runs the editor in Docker and needs a licence in the repository
+secrets, and there is no licence to give it. Unity has retired manual activation for Personal —
+`license.unity3d.com/manual` now accepts a Plus/Pro serial and nothing else — and a Unity 6 Personal
+entitlement has neither a serial nor a `.ulf` on disk; it lives as an entitlement XML tied to the
+account. GameCI's own `unity-request-activation-file` action is retired and answers any run with "this
+action is no longer supported".
 
-Two notes for when it is. GameCI's `unity-request-activation-file` action is retired and refuses to
-run, so the activation request comes from the local editor
-(`Unity -batchmode -quit -createManualActivationFile`) and goes through Unity's manual activation
-page; the README carries the commands. And a Personal licence is single-seat, so activating it in CI
-can knock the local editor's activation loose — GameCI has a return-licence step for that.
+Every push failing in twenty seconds for that reason was worse than no signal, so the automatic
+triggers came off. What replaced them: the machine that already has an activated editor does the
+building, through a `workflow_dispatch`-only workflow on a self-hosted runner registered to this
+repository. No secrets, no Docker, no licence handling. The runner is not installed as a service —
+it is started by hand when a build is wanted — and its workspace persists, so `Library/` stays warm
+without a cache step, which was the largest cost of the hosted version.
 
-Builds run locally in the meantime — `BuildScript` is the same entry point CI calls.
+What this gives up is builds on someone else's machine, which for a single-author private repository
+is not much. What it keeps is the point of §10's rule: a WebGL build that can be run at any time.
 
 **Common settings**: IL2CPP, Managed Stripping High, unused engine modules stripped, `link.xml` preserving save-model types (§11).
 

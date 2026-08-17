@@ -144,29 +144,25 @@ and ships without one. See DESIGN.md §9.1.
 
 ### CI
 
-`.github/workflows/build.yml` builds all three targets and deploys the Pages build. **Its automatic
-triggers are off**: `game-ci/unity-builder` runs the editor headless in Docker and needs a Unity
-licence in the repository secrets, and without one every push failed in under twenty seconds — a red
-mark on each commit that says nothing about the commit.
+`.github/workflows/build.yml` builds the three configurations **on demand, on a self-hosted runner on
+the author's Mac**. There are no licence secrets, because there is no licence to put in one: Unity has
+retired manual activation for Personal licences — the portal accepts a Plus/Pro serial and nothing
+else — and a Unity 6 Personal entitlement has neither a serial nor a `.ulf`. `game-ci/unity-builder`
+runs the editor in Docker and cannot start without one, so the hosted path is closed rather than
+merely unconfigured. The machine that already has an activated editor builds instead.
 
-To turn it back on, add three repository secrets and restore the `push` and `pull_request` triggers,
-which are kept in a comment at the top of the workflow:
+Running a build:
 
 ```bash
-# 1. produce an activation request from the installed editor
-/Applications/Unity/Hub/Editor/6000.5.8f1/Unity.app/Contents/MacOS/Unity \
-  -batchmode -nographics -quit -createManualActivationFile -logFile -
-# 2. upload the resulting Unity_v6000.5.8f1.alf at https://license.unity3d.com/manual,
-#    pick Unity Personal, and download the .ulf it returns
-# 3. hand it to GitHub
-gh secret set UNITY_LICENSE < Unity_v6000.5.8f1.ulf
-gh secret set UNITY_EMAIL       # the Unity account address
-gh secret set UNITY_PASSWORD    # its password
+~/actions-runner/run.sh          # start the runner; Ctrl-C when done
 ```
 
-GameCI's old `unity-request-activation-file` action is retired and answers any run with "this action
-is no longer supported", so the `.alf` comes from the local editor now. Pages deployment also needs
-Pages enabled with **GitHub Actions** as the source.
+then **Actions → Build → Run workflow**, choosing `webgl`, `macos` or `all`, and whether to deploy
+Pages. A run queued while the runner is down waits for it.
 
-Note that a Personal licence is single-seat: activating it in CI can knock the local editor's
-activation loose. GameCI has a return-licence step for that.
+The runner is registered to this repository only and is deliberately **not** installed as a launchd
+service, so nothing runs on the machine unless it is started by hand. The workspace persists between
+runs, which keeps `Library/` warm and makes a second build far quicker than the first — that cache
+was the biggest cost of the hosted version.
+
+Pages deployment needs Pages enabled with **GitHub Actions** as the source.
