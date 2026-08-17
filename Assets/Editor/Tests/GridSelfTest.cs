@@ -58,6 +58,8 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestSelectionMirrorSwapsHandedParts();
             TestProceduralPillarHeights();
             TestStudsAreFoundByHeightAboveTheGrid();
+            TestPointerTrustRecoversAfterAJump();
+            TestPointerTrustRecoversAfterAResolutionChange();
             TestABowlIsNotMistakenForStuds();
             TestALiftedPillarIsRecutRatherThanStackedOn();
             TestALiftedScaffoldBrickBecomesAPillar();
@@ -654,6 +656,73 @@ namespace BlockMarbleRun.EditorTools.Tests
             def.topStuds = Enumerable.Repeat(studs, count).ToArray();
 
             return def;
+        }
+
+        /// <summary>
+        /// Doubt about the pointer ends by itself, wherever the pointer went.
+        ///
+        /// The bug this exists for: doubt was re-armed on every frame the reading sat far from the
+        /// last trusted position, and only trusted frames updated that position. A pointer that
+        /// jumped and stayed - not a false reading at all, just a fast movement or a window that
+        /// changed underneath it - satisfied both conditions forever, and placing pieces stopped
+        /// working until the pointer happened to wander back.
+        /// </summary>
+        static void TestPointerTrustRecoversAfterAJump()
+        {
+            var trust = new PointerTrust();
+            var screen = new Vector2(1600f, 900f);
+            float now = 10f;
+
+            Check("first reading is trusted", !trust.IsSuspect(new Vector2(800f, 400f), screen, now));
+
+            // Straight across the window in one frame: nobody's hand does that.
+            now += 0.016f;
+            Check("a jump is doubted", trust.IsSuspect(new Vector2(20f, 20f), screen, now));
+
+            // Still down in the corner a frame later. This is the case the old rule got wrong: the
+            // reading no longer looks like a jump, it looks like a stationary pointer.
+            now += 0.016f;
+            Check("the frames after a jump are doubted too",
+                  trust.IsSuspect(new Vector2(22f, 21f), screen, now));
+
+            // Past the window, with the pointer still nowhere near where it was trusted last.
+            now += 0.3f;
+            Check("doubt expires where the pointer now is",
+                  !trust.IsSuspect(new Vector2(22f, 21f), screen, now));
+
+            now += 0.016f;
+            Check("and the new position is what the next frame is measured against",
+                  !trust.IsSuspect(new Vector2(40f, 30f), screen, now));
+        }
+
+        /// <summary>
+        /// A resolution change is not a mouse movement.
+        ///
+        /// Entering fullscreen moves every reading at once, and measuring the first one against a
+        /// position from the old canvas makes an ordinary pointer look like it crossed the window.
+        /// Under the old rule it went on looking that way, because it never went back - which is why
+        /// the editor came up able to place pieces and lost the ability on going fullscreen.
+        /// </summary>
+        static void TestPointerTrustRecoversAfterAResolutionChange()
+        {
+            var trust = new PointerTrust();
+            var windowed = new Vector2(1600f, 900f);
+            var full = new Vector2(3456f, 2160f);
+            float now = 10f;
+
+            trust.IsSuspect(new Vector2(800f, 400f), windowed, now);
+
+            now += 0.016f;
+            Check("the frame the screen changes is doubted",
+                  trust.IsSuspect(new Vector2(1700f, 1200f), full, now));
+
+            now += 0.3f;
+            Check("and trust returns in the new coordinates",
+                  !trust.IsSuspect(new Vector2(1700f, 1200f), full, now));
+
+            now += 0.016f;
+            Check("with movement judged at the new size",
+                  !trust.IsSuspect(new Vector2(1750f, 1240f), full, now));
         }
 
         static void Check(string what, bool condition, string detail = null)

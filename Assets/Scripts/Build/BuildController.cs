@@ -1149,42 +1149,19 @@ namespace BlockMarbleRun.Build
 
             Vector2 screen = mouse.position.ReadValue();
 
-            // Where the pointer is reported to be is not always where it is. Around a focus change,
-            // or the frame an IMGUI button is released, the reading lands somewhere near the origin
-            // of the window for a single frame - not exactly at zero, which is why guarding that one
-            // point did not help - and the corner of the screen is a perfectly good piece of ground,
-            // so the click went through and planted a piece down there.
+            // Whether this reading can be believed at all - see PointerTrust, which owns the rule and
+            // is exercised by the self test, because the previous version of it could strand the
+            // editor: after a jump it doubted every frame that stayed far from the last trusted point,
+            // and only trusted frames updated that point. Entering fullscreen moves every reading at
+            // once, so the two held each other up and placing stopped working for good.
             //
-            // The tell is not where the reading is but how far it moved. A hand cannot carry a mouse
-            // across the window between two frames, so a click arriving on the same frame as a jump
-            // that size was not aimed by anyone.
-            float impossible = Screen.height * 0.2f;
-
-            if (_lastPointer != Vector2.zero && (screen - _lastPointer).magnitude > impossible)
-            {
-                // A jump begins the doubt rather than being the whole of it. The false reading sits
-                // near the corner for several frames, and only its first looks like a jump - the rest
-                // are a perfectly ordinary stationary pointer, which is why the ghost still flashed
-                // down there after the click itself was refused.
-                _distrustUntil = Time.unscaledTime + 0.25f;
-            }
-
-            // Doubt ends the moment the pointer is somewhere sensible again - back near where it was
-            // before it wandered off - or after a quarter of a second, so a genuine flick across the
-            // window is not left without a ghost.
-            bool suspect = Time.unscaledTime < _distrustUntil &&
-                           (screen - _lastPointer).magnitude > impossible;
-
-            if (!suspect)
-            {
-                _lastPointer = screen;
-                _distrustUntil = 0f;
-            }
-
             // Deliberately no test for the pointer being outside the window. It was added on a guess
             // and is not safe to make: the pointer and Screen.width are not always in the same pixels
             // - on a display where the browser reports one and the canvas the other, every reading
             // looks out of bounds, and the world stops accepting clicks entirely.
+            bool suspect = _pointerTrust.IsSuspect(
+                screen, new Vector2(Screen.width, Screen.height), Time.unscaledTime);
+
             if (suspect)
             {
                 ghost.Hide();
@@ -1667,11 +1644,8 @@ namespace BlockMarbleRun.Build
         /// <summary>Whether the click in progress started on the palette rather than in the world.</summary>
         bool _clickBeganOnPalette;
 
-        /// <summary>Last trusted pointer reading, for spotting one that jumps across the window.</summary>
-        Vector2 _lastPointer;
-
-        /// <summary>Until when readings far from the last trusted one are ignored.</summary>
-        float _distrustUntil;
+        /// <summary>Whether this frame's pointer reading can be believed.</summary>
+        readonly PointerTrust _pointerTrust = new();
 
         /// <summary>
         /// Right click takes the piece under the cursor back into your hand.
