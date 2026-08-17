@@ -37,6 +37,13 @@ cleanup() {
   pkill -f "$runner_dir/bin/Runner.Listener" 2>/dev/null || true
   wait "$runner_pid" 2>/dev/null || true
 
+  # Give it a moment to actually go: the first version of this check looked immediately after the
+  # signal and reported a live runner that was already on its way out.
+  for _ in $(seq 1 10); do
+    pgrep -f "Runner.Listener" > /dev/null || break
+    sleep 1
+  done
+
   if pgrep -f "Runner.Listener" > /dev/null; then
     echo "WARNING: a Runner.Listener is still running - kill it by hand." >&2
   else
