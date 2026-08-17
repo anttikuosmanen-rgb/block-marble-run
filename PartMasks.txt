@@ -196,16 +196,16 @@ funnel_10x10
 
     - - . . o o . . B B 
     - . . . o o . . o o 
-    . . . . o o . . o o 
-    . . . o . . o . . . 
-    o o o . o o . o o o 
-    o o o . o o . o o o 
-    . . . o . . o . . . 
-    . . . . o o . . . . 
+    . . . . . . . . o o 
+    . . . . . . . . . . 
+    o o . . o o . . o o 
+    o o . . o o . . o o 
+    . . . . . . . . . . 
+    . . . . . . . . . . 
     - . . . o o . . . - 
     - - . . o o . . - - 
 
-    2 stud cell(s), 38 antistud cell(s)
+    2 stud cell(s), 26 antistud cell(s)
 
 ============================================================
 funnel_10x10_mirror
@@ -213,16 +213,16 @@ funnel_10x10_mirror
 
     B B . . o o . . - - 
     o o . . o o . . . - 
-    o o . . o o . . . . 
-    . . . o . . o . . . 
-    o o o . o o . o o o 
-    o o o . o o . o o o 
-    . . . o . . o . . . 
-    . . . . o o . . . . 
+    o o . . . . . . . . 
+    . . . . . . . . . . 
+    o o . . o o . . o o 
+    o o . . o o . . o o 
+    . . . . . . . . . . 
+    . . . . . . . . . . 
     - . . . o o . . . - 
     - - . . o o . . - - 
 
-    2 stud cell(s), 38 antistud cell(s)
+    2 stud cell(s), 26 antistud cell(s)
 
 ============================================================
 funnel_6x7
@@ -259,14 +259,14 @@ funnel_8x9
     - - - - - - B B 
     - . . o o . o o 
     . . . o o . o o 
-    . . o o o o . - 
-    o o o o o o o o 
-    o o o o o o o o 
-    . . . o o o . . 
+    . . . . . . . - 
+    o o . o o . o o 
+    o o . o o . o o 
+    . . . . . . . . 
     . . . o o . . . 
     - . . o o . . - 
 
-    2 stud cell(s), 37 antistud cell(s)
+    2 stud cell(s), 26 antistud cell(s)
 
 ============================================================
 funnel_8x9_mirror
@@ -275,14 +275,14 @@ funnel_8x9_mirror
     B B - - - - - - 
     o o . o o . . - 
     o o . o o . . . 
-    - . o o o o . . 
-    o o o o o o o o 
-    o o o o o o o o 
-    . . o o o . . . 
+    - . . . . . . . 
+    o o . o o . o o 
+    o o . o o . o o 
+    . . . . . . . . 
     . . . o o . . . 
     - . . o o . . - 
 
-    2 stud cell(s), 37 antistud cell(s)
+    2 stud cell(s), 26 antistud cell(s)
 
 ============================================================
 pillar_2x2x10
@@ -345,24 +345,12 @@ slide_curve_4x4_mirror
     0 stud cell(s), 4 antistud cell(s)
 
 ============================================================
-stalk_3x3
-  3 x 3 studs, 5 grid layers (2.5 bricks), has a way through it, 2 channel mouth(s)
+stalk_2x2
+  1 x 1 studs, 1 grid layers (0.5 bricks)
 
-    . o . 
-    . o . 
-    - . - 
+    o 
 
-    0 stud cell(s), 2 antistud cell(s)
-
-============================================================
-stalk_3x3_mirror
-  3 x 3 studs, 5 grid layers (2.5 bricks), has a way through it, 2 channel mouth(s)
-
-    . o . 
-    . o . 
-    - . - 
-
-    0 stud cell(s), 2 antistud cell(s)
+    0 stud cell(s), 1 antistud cell(s)
 
 ============================================================
 terminal_2x2
@@ -439,22 +427,22 @@ u_turn_slide
   6 x 5 studs, 4 grid layers (2 bricks), has a way through it, 2 channel mouth(s)
 
     . . . . . . 
-    . o . . o . 
+    . . . . . . 
     . . . . . . 
     o o B B o o 
     o o B B o o 
 
-    4 stud cell(s), 14 antistud cell(s)
+    4 stud cell(s), 12 antistud cell(s)
 
 ============================================================
 u_turn_slide_mirror
   6 x 5 studs, 4 grid layers (2 bricks), has a way through it, 2 channel mouth(s)
 
     . . . . . . 
-    . o . . o . 
+    . . . . . . 
     . . . . . . 
     o o B B o o 
     o o B B o o 
 
-    4 stud cell(s), 14 antistud cell(s)
+    4 stud cell(s), 12 antistud cell(s)
 

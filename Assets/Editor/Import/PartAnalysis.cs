@@ -586,7 +586,13 @@ namespace BlockMarbleRun.EditorTools.Import
             // curve carries one pair of antistuds on the floor and another a whole brick up under its
             // raised mouth, and testing only the base plane found the first pair and missed the
             // second, so half the piece looked as though it could not be clutched to anything.
-            const float slack = 0.5f;
+            //
+            // Tight, because the question is whether the underside is flat there and not merely
+            // whether it passes nearby. A moulded plane reads the same to a hundredth of a
+            // millimetre - a real antistud gives sixty-four samples at exactly 0.0 - while a curve
+            // crossing the same height gives a scatter through the band. At half a millimetre the
+            // scatter counted, and a u-turn slide grew two antistuds in the middle of its ramp.
+            const float slack = 0.15f;
 
             // Measured rather than picked. With the underside rasterised exactly, a cell with an
             // antistud reads between 21% and 36% - the rim and the tube walls, since the rest of the
