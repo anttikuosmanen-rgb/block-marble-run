@@ -12,11 +12,14 @@ name: Build
 # handling at all - and the workspace persists between runs, so Library/ stays warm without a cache
 # step, which was the single biggest cost of the hosted version.
 #
-# Start the runner when you want it, stop it when you are done:
+# tools/ci-build.sh is the way in: it brings the runner up, dispatches this workflow, streams the
+# result and takes the runner down again, so nothing is left listening between builds. Dispatching
+# from the Actions tab works too, with the runner started by hand; a run queued while it is down
+# simply waits.
 #
-#   ~/actions-runner/run.sh          (Ctrl-C to stop; it is not installed as a service)
-#
-# then Actions -> Build -> Run workflow. A run queued while the runner is down simply waits.
+# The triggers stay manual while the runner is the author's Mac. The repository is public, so a
+# workflow that started by itself would run a fork's code on that machine; workflow_dispatch is the
+# guard, because only write access can start it.
 on:
   workflow_dispatch:
     inputs:
