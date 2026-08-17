@@ -1,33 +1,91 @@
 # Block Marble Run
 
-A Duplo-style marble run: build a track out of bricks, then release a marble and watch it run.
-Unity 6.5, URP, targeting macOS and WebGL.
+A Duplo-style marble run. Build a track out of real bricks — blocks, plates, slides, curves, funnels,
+pillars — then switch to play mode, drop a marble in and watch it run. Unity 6.5, URP, targeting
+macOS and WebGL.
 
-See [DESIGN.md](DESIGN.md) for the full design — grid model, physics tuning, asset pipeline,
-milestones and the reasoning behind each decision.
+The parts are 3-D-printable Duplo-compatible STLs at their real dimensions: 16 mm stud pitch, 19.2 mm
+bricks. The grid the game snaps to is the same one the plastic uses, so anything that fits together in
+the game fits together on the floor.
+
+See [DESIGN.md](DESIGN.md) for the reasoning behind all of it — grid model, physics tuning, asset
+pipeline, and a running record of what was measured and what turned out to be wrong.
 
 ## Status
 
-**M0 complete** — project, import pipeline, part analysis, build configs. Nothing is playable yet;
-M1 adds placement.
+Playable. Building, editing, saving, marbles, water and sound all work.
+
+| | |
+|---|---|
+| **Built** | M0 import pipeline · M1 grid & placement · M2 editing · M3 track & supports · M4 play · M5 feel |
+| **Not built** | M6 content — challenge mode, scoring, share codes |
+| **Deliberately unbuilt** | Soft marble assist. Welding the collider seams between joined track pieces removed the problem it was designed to solve (DESIGN.md §7.1, §13) |
+| **CI** | Disabled — see [below](#ci) |
+
+## Building
+
+Point at what you want to place and click. The piece rests on the highest thing under it, and snaps
+to studs or to channel mouths — a channel joining another channel holds a run up exactly as a stud
+holds an anti-stud.
+
+Nothing has to be supported. Build a curve in mid-air and the game puts a pillar under it, cut to the
+right height, undoable in the same step as the piece itself.
+
+| | |
+|---|---|
+| Left click | place |
+| Right click | pick the piece back up · drag to orbit |
+| **Shift** | precise placement — slides stud by stud, never picks the ground, wheel changes level |
+| `Q` `E` | previous / next part |
+| `R` | rotate, or cycle the ways a piece can join |
+| `C` | colour · `X` mark a start or goal · `Del` remove |
+| `V` | grab mode — click picks, drag box-selects, `A` all, `R` turn, `M` mirror |
+| `Cmd/Ctrl C` `V` | copy · paste (first click places the group, second commits it) |
+| `+` `-` | raise or lower a structure |
+| `S` `L` | save · saved creations |
+| `O` | restore the autosave (the build is kept automatically as you work) |
+| `F` `Home` | frame the build · return to origin |
+| `B` | floor: grid / sand / water |
+| `Tab` | play mode |
+
+## Playing
+
+| | |
+|---|---|
+| `Space` | release from every start |
+| Left click | drop a ball anywhere |
+| `M` | change ball — plastic, glass, steel, wood, hollow, small glass |
+| `C` | view: orbit / follow / chase / ride |
+| `N` · right click a ball | watch the next ball · watch that one |
+| `R` `Tab` | reset · back to building |
+| `P` | physics read-out |
+
+Balls differ by density, not by a hand-tuned mass, so a steel ball sinks and a plastic one very nearly
+floats. Water depth is adjustable and is saved with the creation.
 
 ## Requirements
 
 - Unity **6000.5.8f1**
 - Build modules: **WebGL Build Support**, **Mac Build Support (IL2CPP)**
 
-The IL2CPP module is required to produce a shippable macOS build. Without it, local macOS builds
-fail — `BMR_SCRIPTING_BACKEND=mono` runs a Mono smoke test instead, which is not shippable.
+IL2CPP is required for a shippable macOS build. Without it, set `BMR_SCRIPTING_BACKEND=mono` for a
+Mono smoke test — useful locally, not shippable.
+
+First open: **Block Marble Run → Setup Project**. It creates the URP assets and applies the physics
+tuning from DESIGN.md §2, including the 10× world scale and the matching gravity that keeps a 24.5 mm
+marble inside PhysX's usable range. Idempotent.
 
 ## Layout
 
 ```
-Assets/Art/Meshes/          20 source .stl parts — the source of truth
-Assets/Art/Meshes/Generated/ auto-generated mirror meshes (do not hand-edit)
-Assets/Parts/Definitions/   one PartDefinition per part, mostly machine-derived
+Assets/Art/Meshes/          26 source .stl parts — the source of truth
+Assets/Parts/Definitions/   37 PartDefinitions, mostly machine-derived
+Assets/Parts/Marbles/       ball types — size and density, mass derived from them
 Assets/Scripts/             runtime code (BlockMarbleRun.Runtime)
-Assets/Editor/              import pipeline and tooling (BlockMarbleRun.Editor)
+Assets/Editor/Import/       STL/OBJ import, part analysis, mirror and plate generation
+Assets/Editor/Tests/        self-tests and headless probes
 Assets/Settings/            URP pipeline assets
+PartMasks.txt               every part's studs and anti-studs as ASCII, for checking by eye
 ```
 
 ## Adding a part
@@ -36,29 +94,38 @@ Drop a `.stl` into `Assets/Art/Meshes/`. The importer converts it on the spot �
 units, CAD Z-up to Unity Y-up, and welds the triangle soup into shared vertices so curves shade
 smoothly. Then:
 
-1. **Block Marble Run → Report Parts** — prints footprint, layer count, studs and mirror verdict for
-   every part. Read it before generating anything.
+1. **Block Marble Run → Report Parts** — footprint, layers, studs and mirror verdict for every part.
+   Read it before generating anything.
 2. **Block Marble Run → Generate Part Definitions** — creates or refreshes a `PartDefinition` per
-   part and generates mirror meshes for chiral parts.
-3. Fill in what the analyser cannot know: category, track ports, centreline.
+   part, generates mirror meshes for chiral parts and plate variants for blocks.
+3. **Block Marble Run → Write Part Mask Report** — rewrites `PartMasks.txt`. **Look at it.** Studs and
+   anti-studs are derived from the geometry, and reading thirty-seven small ASCII diagrams has caught
+   errors that no amount of looking at the 3-D view did.
+4. Fill in what the analyser cannot know: category and display name.
 
-Re-running step 2 is safe. It only rewrites derived fields, so authored ports, centrelines and
-reviewed mirror verdicts survive.
+Re-running step 2 is safe: it rewrites derived fields only, so authored data and reviewed mirror
+verdicts survive.
+
+A Lego-scale OBJ can join the set through **Block Marble Run → Convert OBJ to Duplo STL**, which
+writes an STL the normal pipeline then reads.
 
 ### Mirrors need one human decision
 
-A part is only worth mirroring if its mirror *cannot* be reproduced by a 90° rotation the game
-already offers. The analyser scores that and classifies each part `Redundant` / `Chiral` /
-`Ambiguous`. Currently two parts land in the middle and need a human verdict:
+A part is only worth mirroring if its mirror *cannot* be reproduced by a 90° rotation the game already
+offers — otherwise the palette quietly gains a duplicate, which is a bug nobody reports; they just find
+the palette confusing. The analyser compares mirrored *volume* (not vertices, which measures
+tessellation) and classifies each part `Redundant` / `Chiral` / `Ambiguous`. Anything ambiguous wants a
+human verdict on `mirrorVerdict`, and the verdict is then remembered. **Reanalyse Mirrors** re-derives
+every verdict and deletes mirrors that are no longer justified. See DESIGN.md §3.4.
 
-| Part | Score | Why it's ambiguous |
-|---|---|---|
-| `bridge_2x3` | 0.92 | Near-symmetric; mirror is probably just a rotation |
-| `curve_2x2` | 0.90 | Mirror *should* be a pure rotation, but asymmetric detail drags the score down |
+## Checks
 
-Set `mirrorVerdict` on those two by hand; the choice is then remembered. Auto-deciding would
-silently ship a duplicate `curve_2x2` — a palette offering the same piece twice is a bug nobody
-reports, they just find the palette confusing. See DESIGN.md §3.4.
+```
+Block Marble Run → Run Grid Self Test     placement, rotation, masks, scaffolding
+Block Marble Run → Run Save Self Test     save round-trip and the v1→v3 migrations
+```
+
+Both run headless in batch mode too, which is how they are usually run.
 
 ## Builds
 
@@ -69,24 +136,24 @@ $UNITY -projectPath . -batchmode -quit -nographics \
   -executeMethod BlockMarbleRun.EditorTools.Bootstrap.BuildScript.BuildWebGLPages
 ```
 
-Entry points: `BuildWebGLSelfHost`, `BuildWebGLPages`, `BuildMacOS`.
+Entry points: `BuildWebGLSelfHost`, `BuildWebGLPages`, `BuildMacOS`. Output goes to `build/`.
 
 There are two WebGL configs because the hosts differ, not out of preference. GitHub Pages cannot set
-`Content-Encoding: br`, so it needs the fallback decompressor; a self-hosted server can send the
-header and ships without it. See DESIGN.md §9.1.
+`Content-Encoding: br`, so it needs the fallback decompressor; a self-hosted server sends the header
+and ships without one. See DESIGN.md §9.1.
 
-CI builds all three on every push and deploys the Pages build from `main`. Keeping WebGL green from
-day one is deliberate — WebGL failures (heap exhaustion, stripping breaking serialization) surface
-late and can force architectural rework.
+### CI
 
-### CI setup
+`.github/workflows/build.yml` builds all three targets and deploys the Pages build. **Its automatic
+triggers are off**: `game-ci/unity-builder` runs the editor headless in Docker and needs a Unity
+licence in the repository secrets, and without one every push failed in under twenty seconds — a red
+mark on each commit that says nothing about the commit.
 
-The workflow needs Unity credentials as repository secrets: `UNITY_LICENSE`, `UNITY_EMAIL`,
-`UNITY_PASSWORD`. See [game.ci](https://game.ci/docs/github/activation) for obtaining a licence file.
-Pages deployment also needs Pages enabled with **GitHub Actions** as the source.
+To turn it back on, add `UNITY_LICENSE` (the `.ulf` file's contents), `UNITY_EMAIL` and
+`UNITY_PASSWORD` as repository secrets — see [game.ci](https://game.ci/docs/github/activation) for
+obtaining the licence file — then restore the `push` and `pull_request` triggers, which are kept in a
+comment at the top of the workflow. Pages deployment also needs Pages enabled with **GitHub Actions**
+as the source.
 
-## Project setup
-
-`Block Marble Run → Setup Project` (or the `SetupProject.Run` method) creates the URP assets and
-applies the physics tuning from DESIGN.md §2 — including the 10× world scale and matching gravity
-that keep a 13 mm marble inside PhysX's usable range. It is idempotent.
+Note that a Personal licence is single-seat: activating it in CI can knock the local editor's
+activation loose. GameCI has a return-licence step for that.

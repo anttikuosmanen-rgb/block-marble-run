@@ -1,9 +1,17 @@
 name: Build
 
+# Automatic runs are off. The workflow needs a Unity licence in the repository secrets
+# (UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD) and there is none, so every push failed within
+# twenty seconds - a red mark on each commit that says nothing about the commit. Left here rather
+# than deleted because the build steps are correct and it is the licence that is missing: add the
+# secrets, restore the push and pull_request triggers below, and it runs.
+#
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
+#     workflow_dispatch:
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 # DESIGN.md §10: keeping the WebGL build green from M0 is deliberate. WebGL failures

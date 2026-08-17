@@ -6,6 +6,11 @@ Two modes: **Build** (Duplo-style brick placement) and **Play** (marble released
 
 **Targets: macOS (Apple Silicon, Metal) and WebGL.** World is an open universe — no bounded baseplate.
 
+**State: M0–M5 built.** Building, editing, saving, track connectivity, auto-scaffolding, play mode with
+marbles, water, sound and camera work are all in. M6 (challenge mode, share codes) is not started. This
+document is kept as the reasoning behind the code, not as a plan ahead of it: where a section describes
+something that was later measured or rebuilt, the section says so rather than being quietly rewritten.
+
 ---
 
 ## 0. Platform targets
@@ -58,18 +63,19 @@ Bounding boxes computed from the shipped binary STLs (mm, Z-up, origin at bottom
 | `u_turn` | **78.2** | 95.8 | 23.8 | 5×6 | 1 | yes | 13492 |
 | `u_turn_slide` | 95.8 | **78.2** | **43.0** | 6×5 | **2** | yes | 20922 |
 
-Every Z value decomposes as `layers × 19.2 (+ 4.6 if top studs)`: 19.2, 23.8, 38.4, 43.0. The model holds across all 20 parts — no new height machinery needed, just `heightLayers > 1`.
+Every Z value decomposes as `bricks × 19.2 (+ 4.6 if top studs)`: 19.2, 23.8, 38.4, 43.0. The model held across all 20 parts — no new height machinery needed, just `heightLayers > 1`. (The "layers" column counts *bricks*; the grid has since been halved, so each of these is two grid layers — §1.5.)
 
 Derived constants (real Duplo geometry — assets match it exactly):
 
 ```
 STUD_PITCH_MM   = 16.0      // XY grid
-LAYER_HEIGHT_MM = 19.2      // one brick tall = 1.2 * pitch
+BRICK_HEIGHT_MM = 19.2      // one brick tall = 1.2 * pitch
+LAYER_HEIGHT_MM = 9.6       // the grid's vertical step: half a brick (§1.5)
 STUD_HEIGHT_MM  = 4.6       // 23.8 - 19.2
 CLEARANCE_MM    = 0.2       // n*16 - 0.2 per axis
 ```
 
-Track parts are exactly 1 layer tall with no top studs → **uniform single-layer grid, no special cases**.
+Track parts are exactly 1 brick tall with no top studs → **uniform grid, no special cases**.
 
 ### 1.1 Bounding boxes are not footprints
 
@@ -95,6 +101,40 @@ Occupancy is therefore stored **per layer**, not as one footprint repeated up th
 
 Fix: work internally in **half-stud units (8 mm)**. A part occupying cells `[minCell, minCell+size)` sits at
 `worldXY = (minCell + size * 0.5) * STUD_PITCH`. All parities collapse to one formula.
+
+### 1.5 The grid steps a half-brick, not a brick
+
+Plates — half-height bricks — are a real Duplo part and the obvious way to fine-tune a slope by a
+small amount. A grid whose only vertical step is 19.2 mm cannot express one at all.
+
+So the layer is **9.6 mm** and every full-height part is two layers. This is a change of unit, not of
+model: nothing about clutch, support or channel heights depends on the step being a whole brick, and
+the channel-floor rule (§6.1) was always stated against the *brick* pitch, which is unchanged. What it
+does change is every stored layer index, which is why save v3 doubles them (§8).
+
+The funnels added later settled the question independently: they are **28.8 mm** tall — one and a
+half bricks — and would not have fitted a brick-stepped grid at any height at all.
+
+Worth noting what does **not** follow: a Lego plate is a third of a Lego brick, and the Lego→Duplo
+scale is ×2 on both pitch and height. A Duplo half-brick is therefore not "a Duplo plate" in the Lego
+sense, and no finer subdivision buys anything until a part actually needs one.
+
+### 1.6 The set as it stands
+
+The table above is the twenty parts the pipeline was designed against. It has grown, and every
+addition arrived through the same pipeline rather than through a special case:
+
+| Source | Count | How it is made |
+|---|---|---|
+| STLs in `Art/Meshes` | 26 | dropped in the folder, analysed on import |
+| Generated mirrors | 5 | chirality analysis, §3.4 — the two handed slides and all three funnels |
+| Generated plates | 6 | half-height copies of the six blocks, §3.6 |
+
+**37 `PartDefinition` assets** in the catalog, plus support pillars of any height made at runtime from
+one of the modelled ones (§3.7). One of the 26 STLs was not modelled for this: `stalk_2x2` is a Lego
+part converted from OBJ at Duplo scale (§3.8). The funnels are the largest parts in the set at 10×10 studs
+and the most interesting for derivation — the useful antistuds are a pair on the lip, far from the
+footprint's corners, with most of the interior open (§3.5).
 
 ---
 
@@ -177,8 +217,8 @@ Keeps STL as source of truth. Responsibilities:
 Editor tool that generates a `PartDefinition` ScriptableObject from a mesh:
 
 - **Footprint**: `ceil((bounds.size + 0.2) / 16mm)` per axis as a *candidate*, cross-checked against underside socket/tube clusters (§1.1). Agreement → accept silently. Disagreement → flag for confirmation.
-- **Top studs**: cluster geometry above the `heightLayers × 19.2` plane by XY; each cluster centroid → a stud cell. Gives the connection mask for free, and distinguishes `bridge_2x3`/`u_turn` (studded) from track parts (not).
-- **Height in layers**: `round(bodyHeight / 19.2)` where `bodyHeight` = total minus 4.6 if studs were detected. Verified against the four observed values (19.2 / 23.8 / 38.4 / 43.0).
+- **Top studs / bottom sockets**: read off an exact height map, not clustered — see §3.5, which is where most of the pipeline's real difficulty turned out to live.
+- **Height in layers**: `round(bodyHeight / 9.6)` where `bodyHeight` = total minus 4.6 if studs were detected. The funnels are the reason the divisor is a half-brick (§1.5).
 - **Mirror**: chirality analysis, §3.4.
 - Manual fields left to the author: category, display name, **track ports**, collider prefab override.
 
@@ -247,15 +287,95 @@ The classification is still `Redundant` / `Chiral` / `Ambiguous` with the verdic
 
 Because verdicts are stored, changing the analysis needs an explicit **Reanalyse Mirrors** pass: it re-derives every verdict and deletes mirror assets that are no longer justified. Without it, the four bad mirrors would have stayed in the palette permanently.
 
+### 3.5 Studs and sockets are read, not guessed
+
+`topStuds` and `bottomSockets` are the two masks everything else rests on: they decide what clutches
+to what, where scaffolding may stand, and where the alignment guides draw. They are also the two that
+were wrong the longest, in ways that only showed up as strange behaviour three systems downstream —
+a curve that would not accept a brick on its raised end, a pillar refusing to appear, an antistud
+highlighted over open air.
+
+Two rules earn their keep:
+
+**A stud is a plateau with a body under it, not the highest thing in the column.** The first rule was
+"highest surface in this cell", which is true of a brick and false of anything with a rim: every large
+funnel grew a ring of studs round its edge, because the edge *is* the highest thing there. The test is
+now two plateaus in the same cell — a flat top, and another flat surface exactly 4.6 mm below it,
+which is what a moulded stud actually is.
+
+**A socket needs the underside to be flat there, not merely low there.** Bounding-box fill was the
+original shortcut and it is wrong in both directions: it claimed a slide curve's corner of open air,
+and it swallowed the two lip studs that are the only thing a funnel hangs from. Rasterising each
+triangle exactly fixed the coverage; the remaining errors were tolerance. Measured on `u_turn_slide`,
+a genuine antistud samples **64 points at exactly 0.0** — one moulded plane — while the two false
+cells scattered across 19.3–21.1 mm, a ramp merely crossing the cell. The flatness tolerance is
+therefore **0.15 mm**, tight on purpose; at 0.5 mm the scatter counted and the u-turn grew two
+antistuds in the middle of its slope.
+
+A cell is a socket when at least **15 %** of its area is flat underside at the part's base. Not a
+majority: a funnel's lip cell is mostly opening.
+
+**The masks are checked by eye, once, in text.** `PartMaskReport` writes `PartMasks.txt` — every part
+as an ASCII grid, `T` stud, `o` antistud, `B` both, `.` neither, `-` outside the footprint. Reading
+thirty-seven small diagrams found three real errors that no amount of looking at the 3-D view had, and
+it is regenerated whenever the derivation changes.
+
+### 3.6 Plates are generated, not modelled
+
+A plate is a brick with the middle 9.6 mm removed. Cutting one out of the block mesh gives six parts
+for no modelling, and — more to the point — guarantees they stay consistent with the blocks they are
+cut from: a plate's studs are the block's studs by construction, not by a second author's care.
+
+### 3.7 Pillars are procedural
+
+A ten-brick column used to be ten placed bricks: ten map entries, ten colliders, ten seams for a
+marble that strays onto it, ten lines in the save file. One pillar of the right height is one of each.
+
+`PillarMeshBuilder` finds the plain shaft of the modelled pillar — **measured** as the longest run
+whose cross-section does not change, rather than written down — and lengthens or shortens it, leaving
+the moulded base and studded top untouched. Definitions are made at runtime and named for their
+height (`pillar_2x2x9`), so a save refers to a part that the catalog will not contain until the loader
+asks for it; `ProceduralPillars.Resolve` is the loader's fallback for exactly that.
+
+The scaffolder prefers a pillar, falls back to bricks, and finishes with a plate when the remaining
+gap is half a brick. Raising an existing support **re-cuts the pillar** rather than stacking bricks on
+top of it, which is why a lifted build keeps looking like one column instead of growing a totem pole.
+
+### 3.8 Foreign parts and soft parts
+
+`ObjToStl` converts an OBJ into the same STL form the rest of the pipeline reads, with a scale factor
+recorded in the file's header comment. It exists so a Lego-scale model can join the set without a
+second import path — Lego→Duplo is ×2 on both pitch and height, and the one converted part
+(`stalk_2x2`) is deliberately left at Lego scale, because a Lego piece stands on a Duplo stud as-is.
+
+Two consequences worth stating, both learned by getting them wrong:
+
+- **The axis swap mirrors handedness.** Z-up → Y-up by swapping y and z is a reflection, not a
+  rotation, so two corners of every triangle must be swapped as well or the mesh imports inside-out.
+  It renders almost convincingly until you look at a silhouette.
+- **Centre on the part, not on the bounding box.** The stalk's stud is what a player aligns it by, and
+  its three stalks lean off to one side; centring the bounding box puts the stud visibly off the grid.
+  The pivot comes from the contact patch.
+
+`SoftPart` bends such a part out of a passing marble's way and nudges the marble for it. Unity has no
+soft-body solver and a jointed chain would cost a rigidbody per segment; this deforms the mesh
+directly — squared with height, so the base stays put — and only the base carries a collider, so a
+stalk that has visibly moved aside never stops the ball. The mesh is deformed rather than shaded
+because the same mesh draws the palette icon and the placement ghost.
+
+Nothing Duplo-sized clutches to it: it occupies a single grid layer and offers one antistud, so four
+of them fit on one 2×2 brick.
+
 ---
 
 ## 4. Core data model
 
 ```csharp
-struct GridCoord { int x, y, layer; }              // studs, studs, brick-layers
+struct GridCoord { int x, y, layer; }              // studs, studs, half-brick layers (§1.5)
+// StudUnits = 0.16   LayerUnits = 0.096   BrickUnits = 0.192   (1 unit = 10 cm)
 
 class PartDefinition : ScriptableObject {
-    string       id;               // stable GUID string — save files reference this, never an index
+    string       id;               // stable string — save files reference this, never an index
     string       displayName;
     PartCategory category;         // Block | TrackStraight | TrackCurve | Ramp | Start | Goal | Special
     Mesh         mesh;
@@ -263,8 +383,15 @@ class PartDefinition : ScriptableObject {
     Vector2Int   footprintSize;    // in studs
     bool[]       footprintMask;    // supports L-shapes / non-rect parts
     int          heightLayers;
-    bool[]       topStuds;         // which cells expose a stud
-    bool[]       bottomSockets;
+    bool[]       layerMasks;       // occupancy per layer, not the footprint repeated (§1.3)
+    bool[]       topStuds;         // which cells expose a stud        (§3.5)
+    bool[]       bottomSockets;    // which cells have a flat underside (§3.5)
+    bool         hasTunnel;        // a way through it — the collider must not be a solid box
+    Vector2      pivotOffsetUnits; // mesh vs. footprint, from the min corner (§1.2)
+    float        verticalOffsetUnits;   // lifts a part that sits on top of a stud
+    bool         soft;             // bends out of a marble's way (§3.8)
+    int          softBodyLayers;   // layers it actually claims, which for a soft part is its base
+    int          defaultColorIndex;// -1 = take the current palette colour
     TrackPort[]  ports;            // track connectivity, see §6
     Vector3[]    centerline;       // rough channel path, for soft assist (§13.1);
                                    // empty = no assist on this part, pure physics
@@ -400,6 +527,73 @@ Floating parts are not an error state — they are a *normal build style*. Requi
 
 **Pillars must not claim cells the part needs.** Scaffolding is built before the part enters the map, so the map cannot yet see where the part will be. A pillar that takes one of its cells makes the part fail to place and the whole action is abandoned — silently, after the ghost has already shown green.
 
+### 5.3 Precise placement (hold Shift)
+
+The ordinary loop rests a piece on the highest thing under it, which is what a hand does and is right
+almost always. It is wrong in exactly one situation: putting a piece on top of a single pillar. A
+pillar is fourteen layers of smooth side and two studs, so the studs are a target a few pixels across
+at any sensible zoom, and every near miss dropped the piece on the floor beside it.
+
+Holding Shift changes three things, and each of them is a rule about what the player has already
+decided:
+
+- **The ground is never a candidate.** Someone holding Shift over a build is not asking for the floor.
+- **The piece slides on its own level**, on a plane at its own height, rather than re-reading whatever
+  the cursor happens to strike. A ray that slips past the edge of a pillar carries on to the ground
+  behind it, and the piece leaps across the world; a plane has no edge to fall off.
+- **The wheel picks between the levels available in that column**, so two pillars of different heights
+  side by side both offer their tops rather than the taller one winning.
+
+Two things this cost, both found by reading the HUD rather than by reasoning: `CandidateAt` was being
+called twice a frame and the second call consumed the wheel's step, and browsers turn Shift+wheel into
+*horizontal* scroll, so the vertical axis is dead there and both axes have to be read.
+
+### 5.4 Alignment guides
+
+A ghost in mid-air says where a piece is but not what it is over, and a stud is a few pixels at any
+useful zoom. Thin translucent lines run from the piece's corners down to whatever they line up with —
+the part below, or the ground.
+
+They are drawn at the **outward corner of a stud**, not the middle of a cell, and lifted clear of the
+surface: a line down the centre of a stud is hidden by the stud. Anchors are chosen in priority order —
+channel mouths first, then studs, then sockets, then the outline — because a mouth is the connection
+the player is aiming at, and because a piece with no studs at all still needs the vertical reference
+that says where it is in space.
+
+Guides run for the ghost, for a grab-mode selection, and for a pasted group, which is the case that
+needs them most: a pasted group can be raised and lowered, and it is the only one where every mouth
+gets its own set of lines rather than only the corners.
+
+### 5.5 Editing a selection
+
+`V` enters grab mode: click picks, drag box-selects, `A` selects all, Shift+click adds. A selection
+can be copied, turned, mirrored, painted and deleted as one.
+
+**Paste is two-stage.** The first click puts the group under the cursor in *placing* state — bright
+green, still movable, still turnable, raise and lower with the wheel or `+`/`-`; the second click
+commits it. A one-shot paste is unusable for anything but the simplest group, because the position it
+lands at is almost never the one that was wanted and the only recovery is undo.
+
+**Right click picks a piece back up**: it is removed and becomes the held piece, with its colour and
+rotation, ready to put down again. Shift+right-click is the same thing in precise mode, which is how a
+piece gets moved half a stud without being rebuilt. Parts that are not on the palette can be held this
+way too.
+
+**Copied supports are re-cut, not re-stacked.** A group containing a pillar, pasted higher up, gets a
+pillar of the new length rather than the old pillar with a tower of bricks under it.
+
+### 5.6 Autosave
+
+Two ways to lose a build have nothing to do with the game: pressing `G`, and the browser's back
+button. `G` is undoable. The browser is not, so the build is written to a single autosave slot after
+every edit and `O` restores it.
+
+Two guards, both from getting it wrong:
+
+- **The opening state counts as already saved.** Otherwise the empty scene is written the moment the
+  app starts and the previous session is gone before the player has touched anything.
+- **Never write an empty build over a non-empty one.**
+
 ---
 
 ## 6. Track connectivity
@@ -460,6 +654,62 @@ Start-to-goal reachability over the join graph is still unbuilt; it needs play m
 
 **Marble help** setting (off / gentle / strong) drives `assistStrength` — see §13 for the full design and its guardrails.
 
+### 7.1 Seams, not gaps, are what catch a ball
+
+Two joined track pieces are two colliders, and a ball crossing the boundary can catch on the edge
+itself: PhysX takes the contact normal from the edge rather than from either surface, so it points
+somewhere neither surface faces and takes the ball's forward motion with it. The same effect catches
+characters on the seams of a tiled floor.
+
+This is why *bridging* the joints made it worse. A bridge does not remove a seam, it adds two. The
+only fix that removes a seam is not having one, so `ChannelWelder` merges every joined run of channel
+into a single collider on the way into play mode, and the run is one surface from end to end.
+
+### 7.2 Water is Archimedes, not a tuning knob
+
+The floor can be the grid, sand, or water over a sandy bed, and the water level is adjustable in
+bricks. Buoyancy is the weight of the water the ball actually displaces, integrated over the submerged
+cap — so whether a ball floats falls out of its density against the water's, and is not decided
+anywhere in code. A 24.5 mm plastic ball at 1.05 g/cm³ sinks slowly in fresh water, which is what it
+does in a bucket. The steel ball goes straight down.
+
+The water surface sits **above** y=0 with the sand bed at the build plane, rather than the water being
+at the plane. That leaves the coordinate system untouched — nothing ever goes below layer 0 — while a
+brick on the ground is genuinely half submerged and a pillar carrying a run out over the water visibly
+runs down into it.
+
+The floor choice and water level are saved with the creation (§8): a run built to end in water is not
+the same creation without it.
+
+### 7.3 Sound and splash
+
+**Rolling is speed plus contact, not contact alone.** A ball in free fall is silent at any speed, and
+a ball resting against a wall is silent though it is touching something. Contacts open the gate; speed
+drives the volume and pitch of the loop. Impacts knock separately.
+
+Sources are positioned in the world with rolloff distances set for the 10× scale — Unity's defaults of
+1 and 500 units mean full volume until the camera is fifty metres away, which is to say always. Full
+volume to about half a metre, inaudible by twelve.
+
+Splash droplets come from one shared particle system emitting bursts, not a system per splash:
+allocating a system per event costs exactly when several balls are landing at once. The crown is
+thrown up *and* along the ball's direction of travel, with speeds sized for the scaled gravity — sized
+for 9.81 they all fell straight back in.
+
+### 7.4 Watching the ball
+
+`CameraDirector` chooses what to watch; `OrbitCamera` moves. The split is deliberate: choosing a ball
+needs to know about play mode and the balls in it, and a rig that moves a transform towards a subject
+should have no opinion about where subjects come from.
+
+Four views — **orbit**, **follow** (orbit whose pivot rides along), **chase** (behind and above,
+swinging round to the heading), **ride** (close, level, looking down the track ahead). `C` cycles, `N`
+takes the next ball, right-clicking a ball watches it. Heading is only read while there is enough
+horizontal speed to mean one: a ball dropping straight down has no heading, and reading one out of the
+noise spins the camera exactly when the player is trying to watch something.
+
+Build mode stays plain orbit. Nothing being built needs to be chased.
+
 ---
 
 ## 8. Persistence
@@ -468,19 +718,42 @@ JSON, versioned, part-ids as stable strings so adding/reordering parts never bre
 
 ```json
 {
-  "version": 1,
+  "version": 3,
   "name": "Big Loop",
+  "savedAtUnixSeconds": 1771000000,
   "bounds": { "min": [-3, -8, 0], "max": [12, 9, 6] },
+  "floorStyle": 2,
+  "waterLevel": 0.12,
   "parts": [
-    { "id": "track_2x2", "x": 4, "y": 6, "layer": 2, "rot": 1, "color": 3 }
+    { "id": "track_2x2", "x": 4, "y": 6, "layer": 4, "rot": 1, "color": 3, "role": 0 }
   ]
 }
 ```
 
 No `gridSize` — the world is unbounded (§4.2). `bounds` is derived metadata, stored only so the loader can frame the camera and pick a thumbnail angle without walking every part.
 
-- `SaveMigrations` — `version` field with a chain of upgraders from day one.
 - Thumbnail: render-to-texture snapshot stored alongside for the load browser.
+- Saves are stamped with the time and listed as thumbnails, with delete — one fixed slot turned out to
+  mean every creation overwrote the last one. One further slot is reserved for the autosave (§5.6).
+
+### 8.0 The migration chain earned itself
+
+`SaveMigrations` shipped in v1 with nothing to do, on the argument that a chain which exists is far
+easier to extend than one introduced retroactively once saves are already in the wild.
+
+It has since done two real jobs, and the difference between them is the useful part:
+
+- **v1 → v2** (floor style and water level) needed **no step**. `JsonUtility` leaves an absent field at
+  its default, and the default *is* what an older save means: it was built on the grid. The version
+  was bumped anyway because the two are worth telling apart in a file.
+- **v2 → v3** (the half-brick grid, §1.5) needed a real one. Every stored layer index now means half
+  of what it did, so a creation saved before the change would load at half its height with its
+  channels meeting nothing. **Doubling every layer is the whole migration** — the grid got finer, not
+  different.
+
+The rule that falls out: a step is for a change that cannot be read correctly without one. The `role`
+field (start/goal, §6.5) was added with no bump at all, because "no role" is exactly what an older
+save means by saying nothing.
 
 ### 8.1 `ISaveStore` — required by WebGL
 
@@ -511,34 +784,44 @@ Export/import a creation as a `.json` file (gzip + base64 for short share codes)
 ```
 Assets/
   Art/Meshes/*.stl                 // source of truth, ScriptedImporter handles them
-  Art/Materials/
-  Parts/Definitions/*.asset        // PartDefinition SOs
-  Parts/Colliders/*.prefab
+  Art/Materials/                   // palette materials, one per colour (§5.2)
+  Parts/Definitions/*.asset        // 37 PartDefinition SOs, mostly machine-derived
   Parts/PartCatalog.asset          // palette ordering + categories
   Scripts/
     Core/          GameMode state machine, bootstrap, physics config
-    Grid/          GridCoord, GridMap, Footprint, PlacementValidator,
-                   GroundConnectivity, ScaffoldGenerator
-    Parts/         PartDefinition, PartCatalog, PlacedPart, PartFactory
-    Build/         BuildController, GhostPreview, PlacementRaycaster,
-                   CommandStack, Commands/
-    Track/         TrackPort, TrackGraph, ConnectionSolver
-    Play/          PlayController, MarbleSpawner, Marble, MarbleAssist,
-                   GoalTrigger, OutOfBounds
-    Camera/        OrbitCamera, FollowCamera, FrameBuild
-    World/         GroundPlaneRaycaster, InfiniteGridRenderer, Chunk, ChunkMap
-    Persistence/   SaveModel, SaveMigrations,
-                   ISaveStore, FileSaveStore, IndexedDbSaveStore, ICreationTransfer
-    UI/            Palette, Toolbar, BuildHud, PlayHud   (UI Toolkit)
-  Plugins/WebGL/   SaveStore.jslib, FileTransfer.jslib
-  Shaders/         InfiniteStudGrid.shadergraph
+    Grid/          GridCoord, GridMap, PlacedPart, PlacementSolver,
+                   ScaffoldBuilder, Assembly, SelectionOps
+    Parts/         PartDefinition, PartCatalog, PartFactory,
+                   BrickColliderBuilder, PillarMeshBuilder, ProceduralPillars
+    Build/         BuildController, GhostPreview, PartPalette, BuildHud,
+                   Selection, PasteSession, AlignmentGuides, EditCommands,
+                   SaveBrowser, UiScale, StressTest
+    Track/         ChannelWelder, JointBridges, OpenPortMarkers
+    Play/          PlayController, Marble, MarbleDefinition, MarbleAudio,
+                   SoundBank, SoftPart, PhysicsPanel, RunTester
+    CameraRig/     OrbitCamera, CameraDirector
+    World/         BuildRaycaster, InfiniteGround, Scenery, Splash,
+                   PlacedPartMarker, WebGLInputBootstrap
+    Persistence/   SaveModel, SaveMigrations, SaveService,
+                   ISaveStore, FileSaveStore, IndexedDbSaveStore
+  Plugins/WebGL/   SaveStore.jslib
+  Shaders/         InfiniteStudGrid.shader
   Editor/
-    StlScriptedImporter, PartDefinitionInspector,
-    FootprintDeriver, ChiralityAnalyzer, MirrorPartGenerator,
-    PartValidatorWindow
+    Import/        StlFile, StlMeshBuilder, StlScriptedImporter, PartAnalysis,
+                   PartDefinitionGenerator, MirrorBuilder, PlateBuilder,
+                   ObjToStl, PartReport, PortDiagnostic, OrientationDiagnostic
+    Bootstrap/     SetupProject, BuildSceneSetup, BuildScript,
+                   PartGalleryScene, PartIconBaker, AddPackages
+    Tests/         GridSelfTest, SaveSelfTest, and the probes (§9.2)
 ```
 
-Packages: URP, Input System, UI Toolkit (built in), optionally Splines.
+Two things the plan expected that are not there. The **UI is IMGUI, not UI Toolkit** — the HUD is a
+dense read-out of live state that is rewritten constantly, which is what IMGUI is good at, and a
+retained-mode tree earned nothing here. Colliders are **built in code** (`BrickColliderBuilder`) rather
+than authored as prefabs per part: the shapes are derivable from the same masks §3.5 derives, and a
+prefab per part is one more thing to drift from the mesh.
+
+Packages: URP 17.5.0 and Input System 1.20.0. That is the whole list.
 
 ### 9.1 Build & hosting matrix
 
@@ -554,7 +837,35 @@ GitHub Pages cannot set response headers, so without the decompression fallback 
 
 Ship both from one CI job (`unity-builder` GitHub Action): `webgl-selfhost`, `webgl-pages` (auto-deployed to Pages on green), `macos` (Apple Silicon / Universal, Metal). Pages doubles as the always-current playable link for testing on other machines.
 
+**CI is currently disabled, and this is a licence problem rather than a build problem.**
+`game-ci/unity-builder` runs the editor headless in a Docker image and needs a Unity licence in the
+repository secrets — `UNITY_LICENSE` (the `.ulf` contents), `UNITY_EMAIL`, `UNITY_PASSWORD`. There are
+none, so every push failed within twenty seconds: a red mark on each commit that says nothing about
+the commit, which is worse than no signal at all. The workflow is kept intact with only
+`workflow_dispatch` as its trigger; adding the secrets and restoring the `push` / `pull_request`
+triggers is all that is needed to turn it back on.
+
+Note for when it is: a Personal licence is single-seat, so activating it in CI can knock the local
+editor's activation loose. GameCI has a return-licence step for that.
+
+Builds run locally in the meantime — `BuildScript` is the same entry point CI calls.
+
 **Common settings**: IL2CPP, Managed Stripping High, unused engine modules stripped, `link.xml` preserving save-model types (§11).
+
+### 9.2 Headless probes beat reasoning from screenshots
+
+The `Editor/Tests` folder holds two self-tests and a dozen small probes — `ScaffoldProbe`,
+`PillarProbe`, `SocketProbe`, `GuideProbe`, `ColliderProbe`, `LevelProbe`, `MeshProbe`,
+`PartRenderProbe` — each of which sets up one situation headlessly and prints the numbers.
+
+They are listed here because the pattern was worth more than any one of them. Nearly every stubborn
+bug in this project was settled in a single run of a probe after rounds of reasoning from screenshots
+had got it wrong: the mirror masks that were never copied, the wheel step being consumed twice a
+frame, the funnel's real footprint, an STL that imported inside-out (found by rendering it to a PNG
+and looking at it), the antistud tolerance measured as 64 samples at exactly 0.0 against a scatter.
+
+`PartMaskReport` (§3.5) is the same idea aimed at the author rather than at the code.
+
 
 ---
 
@@ -562,15 +873,22 @@ Ship both from one CI job (`unity-builder` GitHub Action): `webgl-selfhost`, `we
 
 | # | Goal | Done when |
 |---|---|---|
-| M0 | Project + import pipeline | Unity 6.5 URP project, `git init`, STL importer working, all 20 parts render at correct scale with smooth normals, chirality analysis + mirror generation reviewed once. **CI producing WebGL + macOS builds, Pages deploy live, on day one** |
-| M1 | Grid & placement | Orbit camera, infinite grid ground, ghost preview, place/delete blocks with snapping, multi-layer parts, support rules. 2000-part stress scene profiled on WebGL — decides GameObject vs. instanced rendering |
-| M2 | Editing | Rotation, colors, box select, undo/redo, async save/load via `ISaveStore` on both targets, thumbnails |
+| M0 | Project + import pipeline | **Done.** Unity 6.5 URP project, STL importer, all parts at correct scale with smooth normals, chirality analysis + mirror generation reviewed. CI written on day one but disabled since (§9.1) |
+| M1 | Grid & placement | **Done.** Orbit camera, infinite grid ground, ghost preview, place/delete with snapping, multi-layer parts, support rules, 2000-part stress scene measured (§5.2) |
+| M2 | Editing | **Done.** Rotation, colours, box select, undo/redo, async save/load via `ISaveStore` on both targets, thumbnails |
 | M3 | Track + supports | **Done.** Derived ports, channel-to-channel clutch, open-mouth feedback, start & goal designation, build-time auto-scaffolding (§5.1) |
-| M4 | Play | Mode switch, marble physics tuned per §2, soft assist (§13) with centerlines on the track parts, release/reset, out-of-bounds, goal detection, timer. **Physics profiled on WebGL at target marble count** |
-| M5 | Feel | UI Toolkit palette, marble-help setting, assist tuning from playtest, sound (rolling loop pitched by speed, clacks on impact — gesture-gated audio init), particles, camera follow, optional decorative baseplate |
+| M4 | Play | **Done.** Mode switch, marble physics tuned per §2, release/reset, out-of-bounds, goal detection, timer, channel welding (§7.1) |
+| M5 | Feel | **Done.** Palette (IMGUI, §9), sound, splash particles, camera follow with four views (§7.4), sand and water floors (§7.2), sky and fog, alignment guides (§5.4), precise placement (§5.3), autosave (§5.6), save browser with thumbnails |
 | M6 | Content | Challenge/level mode, sandbox scoring, more STL parts, share codes + file import/export |
 
 M0–M2 give a usable brick editor; M4 is the first genuinely fun build. Ship-quality vertical slice = M0–M4.
+
+**Where M4/M5 landed differently from the plan.** Soft assist (§13) is *not* built: the marbles ran
+well enough on physics alone once the channel seams were welded away (§7.1), and the assist's whole
+justification was rescuing marginal runs. It stays designed and unbuilt, which is the right state for
+something whose trigger has not fired. The M5 list grew instead in the direction the building itself
+demanded — guides, precise placement, autosave — which is what happens when a tool is used rather than
+specified.
 
 **Keep the WebGL build in CI from M0.** WebGL problems — heap exhaustion, stripping breaking reflection-based serialization, plugin gaps, load time — surface as *late* failures if the target is only exercised at the end, and each one can force architectural rework. A green WebGL build every milestone is the cheapest insurance in this plan.
 
@@ -598,6 +916,12 @@ M0–M2 give a usable brick editor; M4 is the first genuinely fun build. Ship-qu
 | Auto-mirror silently duplicates a non-chiral part | Detector classifies Redundant/Chiral/**Ambiguous**; author confirms in `PartValidatorWindow`, verdict stored (§3.4) |
 | Footprint mis-derived from an inset mesh (`u_turn`) | Two-source derivation: bounding box + underside sockets; disagreement flags for confirmation (§1.1) |
 | Triangle budget as the part set grows (2x10 is 22k tris) | Weld on import; add a Blender LOD pass if the M1 stress test demands it (§14) |
+| **A derived mask silently not copied to a mirror** | Bit the project three times (`layerMasks`, `hasTunnel`, `bottomSockets`), each showing up as odd behaviour far downstream. Self-test asserts the mirrored masks; `PartMasks.txt` (§3.5) makes them readable |
+| **A tolerance that is loose enough to be wrong** | Socket flatness measured, not chosen: 0.15 mm, from a real antistud sampling at exactly 0.0 against a ramp's 19–21 mm scatter (§3.5) |
+| **A ball catching on the seam between two colliders** | Weld joined channel runs into one collider on entering play (§7.1). Bridging seams adds seams |
+| CI red on every commit for a reason unrelated to the commit | Automatic triggers off until the Unity licence secrets exist (§9.1); a permanently red badge trains everyone to ignore it |
+| Autosave overwriting the work it is meant to protect | Opening state counts as already saved; never write an empty build over a non-empty one (§5.6) |
+| IMGUI and the Input System both reading the same click | The palette marks a click used; the world checks before acting on it. Two independent readers of one event is the bug, not the symptom |
 | Soft assist reads as "magnetic" / fake | Project out the tangent component, cap strength well below gravity, apply only inside the channel (§13.0); default low and tune from playtest |
 | New part ships without a centerline | Assist is opt-in per part — empty centerline means pure physics, never a break (§13.1) |
 
@@ -616,15 +940,30 @@ M0–M2 give a usable brick editor; M4 is the first genuinely fun build. Ship-qu
 6. ~~Assist mode~~ → **soft assist (option C)** from the start: rigidbody truth + tunable corrective force, slider defaults low. See §13.
 7. ~~Blender pass~~ → **skip for now.** ScriptedImporter only; revisit for LODs if the M1 stress test demands it. See §14.
 
-All decisions settled. Nothing blocking M0.
+**Settled since**
+
+8. ~~Vertical grid step~~ → **half a brick (9.6 mm)**, so plates and the 1.5-brick funnels have somewhere to stand. Save v3 doubles stored layers. See §1.5, §8.0.
+9. ~~Supports~~ → **real bricks at placement time**, not scaffolding conjured on the switch to play; pillars are procedural and re-cut when raised. See §5.1, §3.7.
+10. ~~UI toolkit~~ → **IMGUI**, not UI Toolkit. The HUD is a live read-out, not a retained tree. See §9.
+11. ~~Soft assist~~ → **designed, not built.** Welding the channel seams (§7.1) removed the failure it existed to rescue. Revisit if playtesting with young children says otherwise. See §13.
+12. ~~CI~~ → **disabled until the Unity licence secrets exist**, workflow kept intact. See §9.1.
+
+All decisions settled. Nothing blocking.
 
 ---
 
-## 13. Decided: soft assist (option C)
+## 13. Decided: soft assist (option C) — designed, not built
 
 **Mixed-age audience → rigidbody physics as the truth, plus a tunable corrective force.** Sections 13.1–13.3 record the alternatives and why C won.
 
-### 13.0 What ships
+**Nothing here is implemented.** The design stands, and the reason it has not been needed is worth
+recording: the marble misbehaviour that motivated it turned out to be mostly the collider seams
+between joined track pieces (§7.1), not the physics. With those welded away, marbles run the built
+tracks on gravity alone. `assistStrength = 0` was always the shipping default, so the unbuilt state is
+the designed state — the slider simply does not exist yet. Build it if playtesting with a young child
+says the run still needs rescuing; the `centerline` field is already on `PartDefinition` and empty.
+
+### 13.0 What it would be
 
 A weak spring-like force pulls the marble toward the local track centerline while it is inside a channel:
 
