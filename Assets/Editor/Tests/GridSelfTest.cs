@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using BlockMarbleRun.Build;
 using BlockMarbleRun.Grid;
 using BlockMarbleRun.Parts;
 using UnityEditor;
@@ -63,6 +64,7 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestATallGapIsFilledByOnePillar();
             TestLevelsOfferedOverABuild();
             TestARaisedUndersideCanMeetAStud();
+            TestClearingTheBuildCanBeUndone();
             TestPlatesAreHalfABrick();
             TestStackingOnAStepAboveTheGround();
             TestScaffoldingLeavesRoomForTheDescendingPiece();
@@ -1646,6 +1648,50 @@ namespace BlockMarbleRun.EditorTools.Tests
 
             Check("the solver offers it", offered,
                 $"{ranked.Count} placements, none at layer {placed.Origin.layer}");
+        }
+
+        /// <summary>
+        /// Emptying the build puts everything back on undo.
+        ///
+        /// It was the one action in the editor that reached into the map directly, which made it the
+        /// only one that could not be taken back - and the most expensive to press by accident.
+        /// </summary>
+        static void TestClearingTheBuildCanBeUndone()
+        {
+            PartDefinition brick = FindDefinition("building_block_2x2");
+            PartDefinition ramp = FindDefinition("slide_2x4");
+
+            if (brick == null || ramp == null)
+            {
+                Check("clear test parts exist", false);
+                return;
+            }
+
+            var map = new GridMap();
+            var a = new PlacedPart(brick, new GridCoord(0, 0, 0), 0, 0);
+            var b = new PlacedPart(ramp, new GridCoord(4, 0, 0), 1, 0);
+
+            map.Add(a);
+            map.Add(b);
+
+            int before = map.Parts.Count;
+
+            var command = new ClearAllCommand(map, _ => null);
+
+            Check("clearing reports something to do", command.Do());
+            Check("the build is empty", map.Parts.Count == 0, $"{map.Parts.Count} left");
+
+            command.Undo();
+
+            Check("undo puts every piece back", map.Parts.Count == before,
+                $"{map.Parts.Count} of {before}");
+
+            Check("and in the same places", map.Contains(a) && map.Contains(b));
+
+            // Nothing to clear is not an edit, or the history fills with empty entries.
+            var empty = new GridMap();
+            Check("clearing an empty build is not an edit",
+                !new ClearAllCommand(empty, _ => null).Do());
         }
     }
 }

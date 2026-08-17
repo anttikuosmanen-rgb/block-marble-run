@@ -109,6 +109,36 @@ namespace BlockMarbleRun.Parts
         /// </summary>
         public bool selectable = true;
 
+        /// <summary>
+        /// Whether the part bends when a marble passes through it.
+        ///
+        /// For growing things - stalks, fronds - which in real Duplo are soft plastic that a marble
+        /// pushes aside. Unity has no soft bodies, so a soft part is drawn bending and nudges the
+        /// marble as it goes by, while only its base is solid.
+        /// </summary>
+        public bool soft;
+
+        [Tooltip("Grid layers of the part that are solid. Above this it bends and has no collider.")]
+        public int softBodyLayers = 2;
+
+        /// <summary>
+        /// Palette index this part is always placed in, or -1 to use whatever colour is picked.
+        ///
+        /// Some pieces have a colour of their own - a plant is green, and a red one is a decision
+        /// rather than an accident. The paint tool still works on it afterwards, so this is a default
+        /// and not a restriction.
+        /// </summary>
+        public int defaultColorIndex = -1;
+
+        /// <summary>
+        /// How far above its layer the part is drawn, in world units.
+        ///
+        /// For pieces that rest on the tops of studs rather than on the surface between them. A Lego
+        /// part on a Duplo brick does exactly that: the flanges around its underside sit on the stud,
+        /// so the whole piece stands a stud's height proud of the brick.
+        /// </summary>
+        public float verticalOffsetUnits;
+
         [Header("Grid")]
         [Tooltip("Footprint bounding size in studs.")]
         public Vector2Int footprintSize = Vector2Int.one;

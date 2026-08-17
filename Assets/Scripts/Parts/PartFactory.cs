@@ -163,6 +163,14 @@ namespace BlockMarbleRun.Parts
                 renderer.sharedMaterial = MaterialFor(part);
             }
 
+            // Added after the filter, since it swaps in a mesh of its own to bend.
+            if (part.Definition.soft && withCollider && part.Definition.mesh != null)
+            {
+                go.AddComponent<Play.SoftPart>().Configure(
+                    part.Definition.mesh,
+                    Mathf.Max(1, part.Definition.softBodyLayers) * GridCoord.LayerUnits);
+            }
+
             part.Instance = go;
             return go;
         }
@@ -200,6 +208,15 @@ namespace BlockMarbleRun.Parts
             // copy, and handing a collider one without it fails at runtime with an error naming a mesh
             // rather than a part. If this ever trips, the part's readable flag and its ports disagree,
             // and the generated collider below is a working answer either way.
+            // A soft part is solid only at its base. Its stalks bend out of the way, and a collider
+            // that stayed where the geometry used to be would stop a marble against something it can
+            // see has moved aside.
+            if (def.soft)
+            {
+                AddSoftBaseCollider(go, part);
+                return;
+            }
+
             if ((def.ports is { Length: > 0 } || def.hasTunnel) && def.mesh != null)
             {
                 if (!def.mesh.isReadable)
@@ -238,6 +255,56 @@ namespace BlockMarbleRun.Parts
         /// middle, for instance - gets one box per occupied cell, so the hole stays a hole instead of
         /// becoming a wall the player cannot click through.
         /// </summary>
+        /// <summary>
+        /// A box around the solid base of a soft part, measured off the mesh.
+        ///
+        /// Not off the grid cells it occupies. A stalk's footprint is two studs across because the
+        /// stalks splay, while the thing actually resting on the build is eight millimetres of stem
+        /// underneath them - a collider the size of the footprint is a wall around a piece a marble
+        /// is meant to brush past.
+        /// </summary>
+        void AddSoftBaseCollider(GameObject go, PlacedPart part)
+        {
+            PartDefinition def = part.Definition;
+            float height = Mathf.Max(1, def.softBodyLayers) * GridCoord.LayerUnits;
+
+            var box = go.AddComponent<BoxCollider>();
+            box.sharedMaterial = surfacePhysics;
+
+            if (def.mesh == null || !def.mesh.isReadable)
+            {
+                // Nothing to measure, so the footprint it is - wrong, but present.
+                box.size = new Vector3(def.footprintSize.x * GridCoord.StudUnits, height,
+                                       def.footprintSize.y * GridCoord.StudUnits);
+                box.center = new Vector3(0f, height * 0.5f, 0f);
+                return;
+            }
+
+            // As tall as the part says it is solid, and as wide as the mesh actually is down there.
+            float lowest = def.mesh.bounds.min.y;
+            float slice = lowest + height;
+
+            float minX = float.MaxValue, minZ = float.MaxValue;
+            float maxX = float.MinValue, maxZ = float.MinValue;
+
+            foreach (Vector3 v in def.mesh.vertices)
+            {
+                if (v.y > slice)
+                    continue;
+
+                minX = Mathf.Min(minX, v.x); maxX = Mathf.Max(maxX, v.x);
+                minZ = Mathf.Min(minZ, v.z); maxZ = Mathf.Max(maxZ, v.z);
+            }
+
+            if (minX == float.MaxValue)
+            {
+                minX = maxX = minZ = maxZ = 0f;
+            }
+
+            box.size = new Vector3(Mathf.Max(0.01f, maxX - minX), height, Mathf.Max(0.01f, maxZ - minZ));
+            box.center = new Vector3((minX + maxX) * 0.5f, lowest + height * 0.5f, (minZ + maxZ) * 0.5f);
+        }
+
         void AddFootprintColliders(GameObject go, PlacedPart part)
         {
             PartDefinition def = part.Definition;

@@ -91,6 +91,7 @@ namespace BlockMarbleRun.Build
 
             _partIndex = ((index % count) + count) % count;
             _variant = 0;
+            _held = null;
             FaceLastPlaced();
         }
 
@@ -152,10 +153,115 @@ namespace BlockMarbleRun.Build
             // Opening the store can genuinely fail - private browsing blocks IndexedDB outright - so
             // this is awaited up front rather than discovered on the player's first save.
             await _saves.InitialiseAsync();
+
+            // Is there something to come back to? A browser's back button takes the whole session
+            // with it, and the player has no reason to expect that a build survives it.
+            try
+            {
+                foreach (Persistence.SaveSlot slot in await _saves.ListAsync())
+                    if (slot.name == AutosaveSlot)
+                        HasAutosave = true;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[Save] Could not look for an autosave: {e.Message}");
+            }
         }
 
+        /// <summary>
+        /// Where the build is kept between edits.
+        ///
+        /// One slot, overwritten. This is not a save history - it is the answer to closing the tab by
+        /// accident, and a hundred numbered copies of the same build would bury the ones the player
+        /// meant to keep.
+        /// </summary>
+        public const string AutosaveSlot = "Autosave";
+
+        /// <summary>Whether there is an autosave to restore, so the HUD can say so.</summary>
+        public bool HasAutosave { get; private set; }
+
+        int _autosavedVersion = -1;
+        float _changedAt;
+
+        /// <summary>
+        /// Writes the build to the autosave slot once it has stopped changing.
+        ///
+        /// Debounced rather than written on every edit: dragging out a wall is dozens of placements
+        /// in a couple of seconds, and each one would otherwise be a round trip to IndexedDB.
+        /// </summary>
+        void Autosave()
+        {
+            if (_saves == null || Busy)
+                return;
+
+            // The state the session opened in is treated as already saved. It was not: the version
+            // counter started below any real value, so an untouched empty scene read as a change and
+            // wrote itself over the autosave a second and a half after launch - destroying the work
+            // the moment the player came back for it.
+            if (_autosavedVersion < 0)
+            {
+                _autosavedVersion = _map.Version;
+                return;
+            }
+
+            if (_map.Version == _autosavedVersion)
+                return;
+
+            // And never an empty build over one that has something in it. Clearing is undoable and
+            // the player may well be about to undo it; an autosave that can only ever be emptied by
+            // accident is worth keeping through one.
+            if (_map.Parts.Count == 0 && HasAutosave)
+            {
+                _autosavedVersion = _map.Version;
+                _changedAt = 0f;
+                return;
+            }
+
+            if (_changedAt <= 0f)
+            {
+                _changedAt = Time.unscaledTime;
+                return;
+            }
+
+            if (Time.unscaledTime - _changedAt < 1.5f)
+                return;
+
+            _autosavedVersion = _map.Version;
+            _changedAt = 0f;
+
+            _ = AutosaveAsync();
+        }
+
+        async Awaitable AutosaveAsync()
+        {
+            try
+            {
+                await _saves.SaveAsync(_map, AutosaveSlot);
+                HasAutosave = true;
+            }
+            catch (System.Exception e)
+            {
+                // Never a popup and never a Status: an autosave that fails must not interrupt the
+                // thing the player is doing. It is reported once, quietly.
+                Debug.LogWarning($"[Save] Autosave failed: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// A part picked out of the build that is not on the bar, held until another is chosen.
+        ///
+        /// Plates below 2x2, generated pillars and anything else left off the palette can still be
+        /// built with - copy and paste has always placed them - so refusing to hand one back when it
+        /// is picked up was a rule with nothing behind it.
+        /// </summary>
+        PartDefinition _held;
+
+        /// <summary>Whether the piece in hand came out of the build rather than off the bar.</summary>
+        public bool HoldingOffPalette => _held != null;
+
         public PartDefinition Selected =>
-            factory != null && factory.Catalog != null ? factory.Catalog.Get(_partIndex) : null;
+            _held != null ? _held
+                : factory != null && factory.Catalog != null ? factory.Catalog.Get(_partIndex) : null;
 
         /// <summary>Surfaced for the HUD, so a missing catalog is visible rather than silently inert.</summary>
         public int CatalogPartCount =>
@@ -167,6 +273,7 @@ namespace BlockMarbleRun.Build
                 return;
 
             ReadKeys();
+            Autosave();
 
             if (orbitCamera != null)
                 orbitCamera.ZoomLocked = Pasting;
@@ -368,6 +475,10 @@ namespace BlockMarbleRun.Build
 
             if (keyboard.xKey.wasPressedThisFrame)
                 CycleRoleUnderCursor();
+
+            // Plain O, like save and load: the browser claims the modified keys.
+            if (keyboard.oKey.wasPressedThisFrame && HasAutosave)
+                _ = LoadAsync(AutosaveSlot);
 
             // Raising and lowering a structure. Not shift+click as first suggested: shift now holds a
             // placement steady, and a modifier that means two things is a modifier that surprises.
@@ -608,6 +719,7 @@ namespace BlockMarbleRun.Build
             if (mouse.rightButton.wasReleasedThisFrame && !_pasteDragged)
             {
                 _paste.Cancel();
+                guides?.Hide();
                 Status = "Paste cancelled";
                 return true;
             }
@@ -655,6 +767,12 @@ namespace BlockMarbleRun.Build
                     _paste.MoveTo(_map, hit.Cell);
             }
 
+            // The held group, drawn down to whatever is under it. This is where the lines earn their
+            // keep: a carried group has no contact with anything to give its height away, and the
+            // wheel moves it through levels that all look alike from a fixed viewpoint.
+            if (guides != null)
+                guides.Show(_map, _paste.Parts);
+
             if (!mouse.leftButton.wasPressedThisFrame)
                 return true;
 
@@ -665,6 +783,8 @@ namespace BlockMarbleRun.Build
             }
 
             List<PlacedPart> placed = _paste.Take();
+
+            guides?.Hide();
 
             if (_history.Execute(new PasteCommand(_map, placed, PillarDefinition, Spawn)))
             {
@@ -824,6 +944,17 @@ namespace BlockMarbleRun.Build
         /// The piece keeps the join it was showing; only the world moves under it, which is why the
         /// placement is simply the same one shifted by the same amount.
         /// </summary>
+        /// <summary>Empties the build, undoably. What G does.</summary>
+        public void ClearAll()
+        {
+            var command = new ClearAllCommand(_map, Spawn);
+
+            _selection.Clear();
+
+            if (_history.Execute(command))
+                Status = $"Cleared {command.Count} pieces - Cmd/Ctrl Z to put them back";
+        }
+
         void GrowAndPlace(PlacedPart below, int layers)
         {
             // Only what the new piece is joining, not the whole world. Lifting every part in the map
@@ -1006,6 +1137,7 @@ namespace BlockMarbleRun.Build
 
             _partIndex = ((_partIndex + step) % count + count) % count;
             _variant = 0;
+            _held = null;
             FaceLastPlaced();
         }
 
@@ -1017,8 +1149,79 @@ namespace BlockMarbleRun.Build
 
             Vector2 screen = mouse.position.ReadValue();
 
+            // Where the pointer is reported to be is not always where it is. Around a focus change,
+            // or the frame an IMGUI button is released, the reading lands somewhere near the origin
+            // of the window for a single frame - not exactly at zero, which is why guarding that one
+            // point did not help - and the corner of the screen is a perfectly good piece of ground,
+            // so the click went through and planted a piece down there.
+            //
+            // The tell is not where the reading is but how far it moved. A hand cannot carry a mouse
+            // across the window between two frames, so a click arriving on the same frame as a jump
+            // that size was not aimed by anyone.
+            float impossible = Screen.height * 0.2f;
+
+            if (_lastPointer != Vector2.zero && (screen - _lastPointer).magnitude > impossible)
+            {
+                // A jump begins the doubt rather than being the whole of it. The false reading sits
+                // near the corner for several frames, and only its first looks like a jump - the rest
+                // are a perfectly ordinary stationary pointer, which is why the ghost still flashed
+                // down there after the click itself was refused.
+                _distrustUntil = Time.unscaledTime + 0.25f;
+            }
+
+            // Doubt ends the moment the pointer is somewhere sensible again - back near where it was
+            // before it wandered off - or after a quarter of a second, so a genuine flick across the
+            // window is not left without a ghost.
+            bool suspect = Time.unscaledTime < _distrustUntil &&
+                           (screen - _lastPointer).magnitude > impossible;
+
+            if (!suspect)
+            {
+                _lastPointer = screen;
+                _distrustUntil = 0f;
+            }
+
+            // Deliberately no test for the pointer being outside the window. It was added on a guess
+            // and is not safe to make: the pointer and Screen.width are not always in the same pixels
+            // - on a display where the browser reports one and the canvas the other, every reading
+            // looks out of bounds, and the world stops accepting clicks entirely.
+            if (suspect)
+            {
+                ghost.Hide();
+                guides?.Hide();
+                return;
+            }
+
+            // Before anything bows out. The pass returns early while the right button is held so the
+            // camera can orbit, and a press-and-drag that is never seen here reads as a click when it
+            // is finally released - which would pick up a piece every time the view was turned.
+            Keyboard keyboard = Keyboard.current;
+            bool holdingShift = keyboard != null &&
+                                (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed);
+
+            if (CurrentTool == Tool.Place && !Pasting &&
+                !(palette != null && (palette.Covers(screen) || palette.JustUsed)))
+                UpdatePick(mouse, screen, holdingShift);
+
             // The palette sits over the world, and a click on it must not also land in the world.
-            if (palette != null && palette.Covers(screen))
+            //
+            // Judged from where the press began, not from where the pointer is now. A button changes
+            // the tool the moment it is released, and the frame that follows has the pointer over the
+            // bar with a click already spent - or, if the pointer has drifted off the bar by then,
+            // over open ground with a live one. Either way the world sees a click the player aimed at
+            // a button, and a piece lands somewhere out in the landscape.
+            // The bar has just taken a click of its own, so this one is spent however the pointer is
+            // reading. Ordering cannot fix it: the bar draws in OnGUI, after this has already run and
+            // decided what to do with the same press.
+            bool overPalette = palette != null && (palette.Covers(screen) || palette.JustUsed);
+
+            if (mouse.leftButton.wasPressedThisFrame)
+                _clickBeganOnPalette = overPalette;
+
+            if (!mouse.leftButton.isPressed && !mouse.leftButton.wasReleasedThisFrame)
+                _clickBeganOnPalette = false;
+
+            if (overPalette || _clickBeganOnPalette)
             {
                 ghost.Hide();
                 guides?.Hide();
@@ -1076,8 +1279,7 @@ namespace BlockMarbleRun.Build
                 return;
             }
 
-            Keyboard keys = Keyboard.current;
-            bool wantsPrecise = keys != null && (keys.leftShiftKey.isPressed || keys.rightShiftKey.isPressed);
+            bool wantsPrecise = holdingShift;
 
             // The wheel picks the level while a placement is held, so it must not also dolly.
             if (orbitCamera != null)
@@ -1163,7 +1365,31 @@ namespace BlockMarbleRun.Build
         /// two towers means pointing at the gap, and continuing an elevated run means pointing at
         /// empty air beside it.
         /// </summary>
+        /// <summary>
+        /// The placement to show and place, in the part's own colour where it has one.
+        ///
+        /// Applied here rather than at every call that solves a placement: the ghost, the lock and
+        /// the click all come through this, and threading a colour choice through the solver would
+        /// put the same decision in a dozen places.
+        /// </summary>
         PlacedPart CandidateAt(GridCoord cursorCell)
+        {
+            PlacedPart candidate = SolveCandidate(cursorCell);
+
+            if (candidate?.Definition == null || candidate.Definition.defaultColorIndex < 0)
+                return candidate;
+
+            var own = (byte)candidate.Definition.defaultColorIndex;
+
+            return candidate.ColorIndex == own
+                ? candidate
+                : new PlacedPart(candidate.Definition, candidate.Origin, candidate.Rotation, own)
+                {
+                    Role = candidate.Role,
+                };
+        }
+
+        PlacedPart SolveCandidate(GridCoord cursorCell)
         {
             PartDefinition def = Selected;
 
@@ -1433,6 +1659,99 @@ namespace BlockMarbleRun.Build
             return new PlacedPart(candidate.Definition,
                 new GridCoord(candidate.Origin.x, candidate.Origin.y, lowest),
                 candidate.Rotation, candidate.ColorIndex);
+        }
+
+        Vector2 _pickDownAt;
+        bool _pickDragged;
+
+        /// <summary>Whether the click in progress started on the palette rather than in the world.</summary>
+        bool _clickBeganOnPalette;
+
+        /// <summary>Last trusted pointer reading, for spotting one that jumps across the window.</summary>
+        Vector2 _lastPointer;
+
+        /// <summary>Until when readings far from the last trusted one are ignored.</summary>
+        float _distrustUntil;
+
+        /// <summary>
+        /// Right click takes the piece under the cursor back into your hand.
+        ///
+        /// It is removed from the build and becomes the piece being placed, with the type, facing and
+        /// colour it had - which is how a mistake gets corrected. Rebuilding that by hand means
+        /// finding the part on the bar, turning it back to the angle it was at and matching its
+        /// colour, and the piece is right there under the cursor already carrying all three.
+        ///
+        /// A right drag still orbits. The two are told apart by how far the pointer moved, as
+        /// everywhere else in the editor.
+        /// </summary>
+        void UpdatePick(Mouse mouse, Vector2 screen, bool wantsPrecise)
+        {
+            if (mouse.rightButton.wasPressedThisFrame)
+            {
+                _pickDownAt = screen;
+                _pickDragged = false;
+            }
+
+            if (mouse.rightButton.isPressed &&
+                (screen - _pickDownAt).sqrMagnitude > 25f)
+                _pickDragged = true;
+
+            if (!mouse.rightButton.wasReleasedThisFrame || _pickDragged)
+                return;
+
+            BuildHit hit = raycaster.RaycastPick(screen);
+            if (!hit.Valid || hit.Collider == null)
+                return;
+
+            var marker = hit.Collider.GetComponentInParent<PlacedPartMarker>();
+            if (marker == null)
+                return;
+
+            PlacedPart picked = marker.Part;
+
+            if (!_history.Execute(new RemovePartCommand(_map, picked, Spawn)))
+                return;
+
+            _selection.Clear();
+
+            // Its own values, so the piece comes back exactly as it was unless something is changed.
+            int index = factory.Catalog.Selectable.IndexOf(picked.Definition);
+
+            if (index >= 0)
+            {
+                _partIndex = index;
+                _held = null;
+            }
+            else
+            {
+                // Not on the bar, so it is held directly. Q, E or the palette let it go.
+                _held = picked.Definition;
+            }
+
+            _rotation = picked.Rotation;
+            _colorIndex = picked.ColorIndex;
+            _variant = 0;
+
+            if (!wantsPrecise)
+            {
+                Status = $"Picked up {picked.Definition.displayName}" +
+                         (index >= 0 ? "" : " (held - not on the bar)");
+
+                return;
+            }
+
+            // Held where it was, so shift and a right click together are "move this piece": it comes
+            // out of the build already locked at its own position, and slides from there.
+            _precise = true;
+            _lockedPlacement = new PlacedPart(picked.Definition, picked.Origin, picked.Rotation,
+                picked.ColorIndex);
+
+            _lockedCursor = raycaster.RaycastLevel(screen,
+                picked.Origin.layer * GridCoord.LayerUnits, out GridCoord onPlane)
+                ? onPlane
+                : hit.Cell;
+
+            Status = $"Moving {picked.Definition.displayName} - slide to position, scroll for level";
         }
 
         void TryDelete(Vector2 screen)

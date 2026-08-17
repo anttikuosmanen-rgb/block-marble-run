@@ -119,8 +119,11 @@ namespace BlockMarbleRun.Grid
 
             foreach (PlacedPart part in moved)
             {
-                // Channel pieces are propped by the usual rules; this is about the bricks holding them.
-                if (part.HasPorts || part.Origin.layer <= 0 || map.IsSupported(part))
+                // Anything the scaffolder props by its own rules is left to them. Testing for channel
+                // mouths let a funnel through, and this pass fills every patch of a part's footprint
+                // - so a funnel came to rest on a raft of bricks covering its whole underside, hole
+                // and all, when one under its shelf is what carries it.
+                if (NeedsCarrying(part) || part.Origin.layer <= 0 || map.IsSupported(part))
                     continue;
 
                 // A pillar that has been lifted is made longer rather than stood on a tower of bricks.
@@ -159,7 +162,7 @@ namespace BlockMarbleRun.Grid
         /// carried. Testing for channel mouths was the old rule and left the funnel unsupported: it
         /// has no mouths of its own, only a shelf that a channel clutches onto.
         /// </summary>
-        static bool NeedsCarrying(PlacedPart part) =>
+        public static bool NeedsCarrying(PlacedPart part) =>
             part.HasPorts || part.Definition.category != PartCategory.Block;
 
         /// <summary>Grey, so scaffolding reads as structure rather than as part of the design.</summary>

@@ -33,6 +33,21 @@ namespace BlockMarbleRun.Build
         /// The build controller reads the mouse directly rather than through IMGUI, so without this a
         /// click on a palette icon also places a brick in the world behind it.
         /// </summary>
+        /// <summary>
+        /// When the bar last acted on a click, in unscaled time.
+        ///
+        /// The world reads the mouse itself rather than through IMGUI, so a click the bar has already
+        /// spent is still sitting there live as far as the rest of the editor is concerned. Which
+        /// tool happens to be active then decides what it does with it - draw a ghost, place a piece,
+        /// paint one - which is why pressing any button in the bar had a different symptom.
+        /// </summary>
+        public float LastUsed { get; private set; }
+
+        /// <summary>Whether the bar has just been used, and the world should keep out of it.</summary>
+        public bool JustUsed => Time.unscaledTime - LastUsed < 0.2f;
+
+        void Used() => LastUsed = Time.unscaledTime;
+
         public bool Covers(Vector2 screenPosition) =>
             Height > 0f && UiScale.ToGui(screenPosition).y >= UiScale.Height - Height;
 
@@ -118,7 +133,10 @@ namespace BlockMarbleRun.Build
                     : new GUIContent(Abbreviate(def.displayName), def.displayName);
 
                 if (GUI.Button(rect, content, _iconStyle))
+                {
                     controller.SelectPart(i);
+                    Used();
+                }
             }
 
             if (!string.IsNullOrEmpty(GUI.tooltip))
@@ -185,7 +203,10 @@ namespace BlockMarbleRun.Build
                 GUI.DrawTexture(new Rect(rect.x - 3, rect.y - 3, width + 6, height + 6), _activeToolBackground);
 
             if (GUI.Button(rect, label))
+            {
                 controller.SetTool(tool);
+                Used();
+            }
 
             return x + width + 4f;
         }
@@ -209,7 +230,10 @@ namespace BlockMarbleRun.Build
                 GUI.DrawTexture(rect, Swatch(i, catalog.palette[i]));
 
                 if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+                {
                     controller.SelectColour((byte)i);
+                    Used();
+                }
 
                 x += size + 4f;
             }

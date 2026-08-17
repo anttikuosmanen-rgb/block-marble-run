@@ -67,8 +67,11 @@ namespace BlockMarbleRun.Build
             if (keyboard.uKey.wasPressedThisFrame)
                 Spawn(targetParts, "crossing_2x2", perInstanceColor: false, "palette, sparse mesh");
 
+            // Through the history, so the one action that empties the whole build is as undoable as
+            // the ones that fill it. The stress runs below still clear directly - a benchmark's
+            // scaffolding is not something anyone wants to undo.
             if (keyboard.gKey.wasPressedThisFrame)
-                Clear();
+                controller.ClearAll();
         }
 
         /// <summary>

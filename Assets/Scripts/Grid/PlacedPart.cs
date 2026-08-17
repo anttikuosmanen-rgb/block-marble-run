@@ -359,6 +359,9 @@ namespace BlockMarbleRun.Grid
             // inside the neighbouring piece while the grid considers them correctly aligned.
             Vector2 pivot = Definition.pivotOffsetUnits;
             position = footprintCentre - rotation * new Vector3(pivot.x, 0f, pivot.y);
+
+            // Lifted for parts that stand on the studs rather than between them.
+            position.y += Definition.verticalOffsetUnits;
         }
     }
 }

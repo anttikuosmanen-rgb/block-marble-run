@@ -45,6 +45,34 @@ namespace BlockMarbleRun.EditorTools.Import
         public bool[] BottomSockets;
 
         /// <summary>
+        /// Middle of the part's contact patch, where one was asked for. Zero means unset.
+        /// </summary>
+        public Vector2 ContactCentreMm;
+
+        /// <summary>The centre of whatever the part rests on, taken from its lowest couple of millimetres.</summary>
+        static Vector2 ContactCentre(List<StlFacet> facets, float floorZ)
+        {
+            const float sliceMm = 2f;
+
+            float minX = float.MaxValue, minY = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue;
+
+            foreach (StlFacet f in facets)
+                foreach (Vector3 v in new[] { f.A, f.B, f.C })
+                {
+                    if (v.z > floorZ + sliceMm)
+                        continue;
+
+                    minX = Mathf.Min(minX, v.x); maxX = Mathf.Max(maxX, v.x);
+                    minY = Mathf.Min(minY, v.y); maxY = Mathf.Max(maxY, v.y);
+                }
+
+            return minX == float.MaxValue
+                ? Vector2.zero
+                : new Vector2((minX + maxX) * 0.5f, (minY + maxY) * 0.5f);
+        }
+
+        /// <summary>
         /// Offset from the mesh's own origin to the centre of its bounding box, in world units.
         ///
         /// Most parts are modelled centred on their footprint, but not all: u_turn's mesh runs from
@@ -71,7 +99,17 @@ namespace BlockMarbleRun.EditorTools.Import
 
         public readonly List<string> Warnings = new();
 
-        public static PartAnalysis Analyse(string stlPath)
+        /// <summary>
+        /// Reads a part's geometry.
+        ///
+        /// <paramref name="solidHeightMm"/> describes a part that is only solid near the floor - a
+        /// stalk, whose stem sits on one stud while its fronds lean out over the neighbours. Above
+        /// that height nothing counts: not for the footprint, not for where the part is centred, not
+        /// for which cells it fills. The fronds are still drawn, and still bend, but a piece that
+        /// takes a whole two-by-two because its leaves spread that far cannot be planted four to a
+        /// brick as the real thing can.
+        /// </summary>
+        public static PartAnalysis Analyse(string stlPath, float solidHeightMm = 0f)
         {
             List<StlFacet> facets = StlFile.Read(stlPath);
             var a = new PartAnalysis { SourcePath = stlPath };
@@ -80,6 +118,29 @@ namespace BlockMarbleRun.EditorTools.Import
             {
                 a.Warnings.Add("No triangles in file.");
                 return a;
+            }
+
+            if (solidHeightMm > 0f)
+            {
+                Bounds(facets, out Vector3 whole, out _);
+                float ceiling = whole.z + solidHeightMm;
+
+                var solid = new List<StlFacet>(facets.Count);
+
+                foreach (StlFacet f in facets)
+                    if (Mathf.Max(f.A.z, Mathf.Max(f.B.z, f.C.z)) <= ceiling)
+                        solid.Add(f);
+
+                // Only if there is a base to speak of. A part that is all fronds is measured whole
+                // rather than reduced to nothing.
+                if (solid.Count > 8)
+                    facets = solid;
+
+                // Where the part actually touches what it stands on, which is what has to line up
+                // with the stud. Even the stem's full height is the wrong thing to centre: stalks
+                // spring from its sides and reach down it, so the material around it is lopsided and
+                // pulls the middle off the stud it is planted on.
+                a.ContactCentreMm = ContactCentre(facets, whole.z);
             }
 
             Bounds(facets, out a.MinMm, out Vector3 max);
@@ -213,9 +274,18 @@ namespace BlockMarbleRun.EditorTools.Import
         {
             float halfClearance = ClearanceMm * 0.5f;
 
-            PivotOffsetUnits = new Vector2(
-                (MinMm.x - halfClearance + FootprintSize.x * StudPitchMm * 0.5f) * 0.01f,
-                (MinMm.y - halfClearance + FootprintSize.y * StudPitchMm * 0.5f) * 0.01f);
+            // The middle of the geometry, lined up with the middle of the cells it occupies.
+            //
+            // The old reading assumed the mesh filled its footprint and worked from its lowest
+            // corner. For a part that does fill it the two agree exactly - a 2x2 brick comes out at
+            // zero either way - and for one that does not, this is the one that is right: a stalk's
+            // stem is ten millimetres inside a sixteen millimetre cell and off-centre within its own
+            // bounds, and the corner reading planted it two and a half millimetres off its stud.
+            PivotOffsetUnits = ContactCentreMm != Vector2.zero
+                ? ContactCentreMm * 0.01f
+                : new Vector2(
+                    (MinMm.x + SizeMm.x * 0.5f) * 0.01f,
+                    (MinMm.y + SizeMm.y * 0.5f) * 0.01f);
         }
 
         /// <summary>

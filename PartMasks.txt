@@ -345,6 +345,26 @@ slide_curve_4x4_mirror
     0 stud cell(s), 4 antistud cell(s)
 
 ============================================================
+stalk_3x3
+  3 x 3 studs, 5 grid layers (2.5 bricks), has a way through it, 2 channel mouth(s)
+
+    . o . 
+    . o . 
+    - . - 
+
+    0 stud cell(s), 2 antistud cell(s)
+
+============================================================
+stalk_3x3_mirror
+  3 x 3 studs, 5 grid layers (2.5 bricks), has a way through it, 2 channel mouth(s)
+
+    . o . 
+    . o . 
+    - . - 
+
+    0 stud cell(s), 2 antistud cell(s)
+
+============================================================
 terminal_2x2
   2 x 2 studs, 2 grid layers (1 bricks), 1 channel mouth(s)
 

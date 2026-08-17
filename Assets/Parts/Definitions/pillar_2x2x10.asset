@@ -19,11 +19,15 @@ MonoBehaviour:
   colliderPrefab: {fileID: 0}
   icon: {fileID: 2800000, guid: 76e6d974545704a2c9de5df67cc94c50, type: 3}
   selectable: 1
+  soft: 0
+  softBodyLayers: 2
+  defaultColorIndex: -1
+  verticalOffsetUnits: 0
   footprintSize: {x: 2, y: 2}
   footprintMask: 01010101
   layerMasks: 0101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101
   heightLayers: 20
-  pivotOffsetUnits: {x: 0.0004999962, y: 0.0004999962}
+  pivotOffsetUnits: {x: 0, y: 0}
   hasTunnel: 0
   topStuds: 01010101
   bottomSockets: 01010101

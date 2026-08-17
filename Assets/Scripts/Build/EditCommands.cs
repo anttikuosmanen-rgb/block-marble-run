@@ -363,7 +363,7 @@ namespace BlockMarbleRun.Build
             // Raising a run leaves air under it; the same rule that props a newly placed piece applies.
             foreach (PlacedPart part in parts)
             {
-                if (!part.HasPorts)
+                if (!ScaffoldBuilder.NeedsCarrying(part))
                     continue;
 
                 foreach (PlacedPart support in ScaffoldBuilder.BuildSupports(_map, part, _pillar))
@@ -410,6 +410,54 @@ namespace BlockMarbleRun.Build
     }
 
     /// <summary>
+    /// Takes the whole build away, and can put it back.
+    ///
+    /// Clearing used to reach into the map directly, which made it the one action in the editor that
+    /// could not be undone - and the most expensive one to get wrong. It is an edit like any other
+    /// and belongs in the history with them.
+    /// </summary>
+    public sealed class ClearAllCommand : IEditCommand
+    {
+        readonly GridMap _map;
+        readonly List<PlacedPart> _parts;
+        readonly System.Func<PlacedPart, GameObject> _spawn;
+
+        public ClearAllCommand(GridMap map, System.Func<PlacedPart, GameObject> spawn)
+        {
+            _map = map;
+            _parts = new List<PlacedPart>(map.Parts);
+            _spawn = spawn;
+        }
+
+        public int Count => _parts.Count;
+
+        public bool Do()
+        {
+            if (_parts.Count == 0)
+                return false;
+
+            foreach (PlacedPart part in _parts)
+            {
+                _map.Remove(part);
+
+                if (part.Instance != null)
+                    Object.Destroy(part.Instance);
+
+                part.Instance = null;
+            }
+
+            return true;
+        }
+
+        public void Undo()
+        {
+            foreach (PlacedPart part in _parts)
+                if (_map.Add(part))
+                    part.Instance = _spawn(part);
+        }
+    }
+
+    /// <summary>
     /// Adds a group of parts that were copied from elsewhere, propping whatever floats.
     ///
     /// The pillars are built once the whole group is down, not piece by piece as it goes in: a run
@@ -452,7 +500,7 @@ namespace BlockMarbleRun.Build
 
             foreach (PlacedPart part in _parts)
             {
-                if (!part.HasPorts)
+                if (!ScaffoldBuilder.NeedsCarrying(part))
                     continue;
 
                 foreach (PlacedPart support in ScaffoldBuilder.BuildSupports(_map, part, _pillar))

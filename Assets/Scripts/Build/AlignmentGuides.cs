@@ -26,6 +26,7 @@ namespace BlockMarbleRun.Build
         [Tooltip("How many corners to draw from.")]
         public int maxLines = 4;
 
+        [SerializeField] Color mouthColour = new Color(0.5f, 1f, 0.6f, 0.55f);
         [SerializeField] Color downColour = new Color(0.45f, 0.9f, 1f, 0.4f);
         [SerializeField] Color upColour = new Color(1f, 0.8f, 0.35f, 0.3f);
 
@@ -103,32 +104,120 @@ namespace BlockMarbleRun.Build
 
             int drawn = 0;
 
+            // The mouths first. When a run is picked up, what matters is where its channels end and
+            // what they are sitting over - a line from an arbitrary corner says nothing about whether
+            // the piece will meet the one it is being carried towards.
             foreach (PlacedPart part in ordered)
             {
                 if (drawn >= maxSelectionLines)
                     break;
 
-                foreach (Vector2Int cell in Anchors(part, 2))
+                foreach (PlacedPart.WorldPort port in part.WorldPorts())
                 {
                     if (drawn >= maxSelectionLines)
                         break;
 
-                    int baseLayer = part.UndersideLayerAt(cell.x, cell.y);
-                    int floor = Below(map, part, cell, baseLayer);
-
-                    // Only downward here. What holds a selection up is the question; what is above it
-                    // is usually the selection itself.
-                    if (floor >= baseLayer)
+                    // Open ones only. Every piece of a run has two mouths, and all but the two at the
+                    // ends are joined to the piece beside them - marking those spends the budget in
+                    // the middle of the group and leaves the ends, which are the only places it can
+                    // join anything, undrawn.
+                    if (!IsOpen(map, selection, part, port))
                         continue;
 
-                    Draw(cell, Outward(part, cell), floor, baseLayer, downColour);
-                    Mark(cell, floor, downColour);
-                    drawn++;
+                    foreach (Vector2Int cell in MouthCells(port))
+                    {
+                        if (drawn >= maxSelectionLines)
+                            break;
+
+                        // At the mouth's own height, not at the part's underside. On a ramp's raised
+                        // end the antistuds are a whole brick below the channel, so a ring drawn on
+                        // the underside sits nowhere near the thing it is meant to point at.
+                        Mark(cell, port.FloorLayer, mouthColour);
+                        drawn++;
+
+                        // The line still runs from what the piece stands on, which is what places it
+                        // in space - so on a raised end the two are deliberately apart, and the gap
+                        // between them is the brick of ramp holding the channel up.
+                        int under = part.UndersideLayerAt(cell.x, cell.y);
+                        int floor = Below(map, part, cell, under);
+
+                        if (floor < under)
+                            Draw(cell, Outward(part, cell), floor, under, downColour);
+                    }
                 }
             }
 
+            // Nothing with a mouth in it: a stack of bricks, a wall. Framed at the far corners of
+            // the whole selection rather than the corners of each piece in it - what the player is
+            // judging is where the group sits, and eight lines scattered through the middle of it
+            // describe the pieces instead of the shape.
+            if (drawn == 0)
+                FrameCorners(map, ordered);
+
             for (int i = _used; i < _pieces.Count; i++)
                 _pieces[i].SetActive(false);
+        }
+
+        /// <summary>
+        /// Four lines at the outermost corners of a selection, down to whatever is under each.
+        ///
+        /// A line to the floor is what places a thing in space: without one a raised build could be
+        /// anywhere along the line of sight, and no amount of turning the camera settles it as
+        /// quickly as a post to the ground does.
+        /// </summary>
+        void FrameCorners(GridMap map, List<PlacedPart> selection)
+        {
+            int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+
+            foreach (PlacedPart part in selection)
+            foreach (GridCoord cell in part.OccupiedCells())
+            {
+                minX = Mathf.Min(minX, cell.x); maxX = Mathf.Max(maxX, cell.x);
+                minY = Mathf.Min(minY, cell.y); maxY = Mathf.Max(maxY, cell.y);
+            }
+
+            if (minX == int.MaxValue)
+                return;
+
+            var corners = new[]
+            {
+                new Vector2Int(minX, minY), new Vector2Int(maxX, minY),
+                new Vector2Int(minX, maxY), new Vector2Int(maxX, maxY),
+            };
+
+            foreach (Vector2Int corner in corners)
+            {
+                // The piece nearest that corner, since a selection is rarely a solid rectangle.
+                PlacedPart owner = null;
+                var at = corner;
+                int nearest = int.MaxValue;
+
+                foreach (PlacedPart part in selection)
+                foreach (GridCoord cell in part.OccupiedCells())
+                {
+                    int distance = Mathf.Abs(cell.x - corner.x) + Mathf.Abs(cell.y - corner.y);
+
+                    if (distance >= nearest)
+                        continue;
+
+                    nearest = distance;
+                    owner = part;
+                    at = new Vector2Int(cell.x, cell.y);
+                }
+
+                if (owner == null)
+                    continue;
+
+                int under = owner.UndersideLayerAt(at.x, at.y);
+                int floor = Below(map, owner, at, under);
+
+                Mark(at, floor, downColour);
+
+                if (floor < under)
+                    Draw(at, new Vector2Int(at.x >= (minX + maxX) * 0.5f ? 1 : 0,
+                                            at.y >= (minY + maxY) * 0.5f ? 1 : 0),
+                         floor, under, downColour);
+            }
         }
 
         public void Hide()
@@ -161,6 +250,55 @@ namespace BlockMarbleRun.Build
             float midY = (minY + maxY) * 0.5f;
 
             return new Vector2Int(cell.x >= midX ? 1 : 0, cell.y >= midY ? 1 : 0);
+        }
+
+        /// <summary>
+        /// Whether a mouth has nothing joined to it, counting the rest of the selection as well as
+        /// the build.
+        ///
+        /// The build alone is not enough: a group being carried is not in the map at all, so every
+        /// one of its mouths would look open - including the many where its own pieces meet.
+        /// </summary>
+        static bool IsOpen(GridMap map, IReadOnlyCollection<PlacedPart> selection,
+                           PlacedPart part, PlacedPart.WorldPort port)
+        {
+            foreach (PlacedPart other in selection)
+            {
+                if (other == part)
+                    continue;
+
+                foreach (PlacedPart.WorldPort candidate in other.WorldPorts())
+                    if (candidate.MidlineHalfStuds == port.MidlineHalfStuds &&
+                        Mathf.Abs(candidate.HeightUnits - port.HeightUnits) < 0.001f)
+                        return false;
+            }
+
+            return map.FindConnection(part, port) == null;
+        }
+
+        /// <summary>
+        /// The cells a channel mouth stands on - the width of the mouth, just inside the part.
+        ///
+        /// Read from the midline the same way a join is, so what is marked is exactly the ground a
+        /// connection is judged against rather than an approximation of it.
+        /// </summary>
+        static IEnumerable<Vector2Int> MouthCells(PlacedPart.WorldPort port)
+        {
+            bool alongX = port.Facing is Facing.North or Facing.South;
+
+            int centreAlong = (alongX ? port.MidlineHalfStuds.x : port.MidlineHalfStuds.y) / 2;
+            int across = (alongX ? port.MidlineHalfStuds.y : port.MidlineHalfStuds.x) / 2;
+
+            int width = Mathf.Max(1, port.WidthStuds);
+            int alongMin = centreAlong - width / 2;
+
+            // The mouth sits on a boundary; the cells belonging to the part are the ones behind it.
+            int inside = port.Facing is Facing.North or Facing.East ? across - 1 : across;
+
+            for (int i = 0; i < width; i++)
+                yield return alongX
+                    ? new Vector2Int(alongMin + i, inside)
+                    : new Vector2Int(inside, alongMin + i);
         }
 
         /// <summary>Layer of the surface below this column, or the piece's own base if nothing is there.</summary>
@@ -318,9 +456,11 @@ namespace BlockMarbleRun.Build
         {
             GameObject marker = Take();
 
+            // A hair above the surface. A ring drawn exactly on the ground is inside it, and a
+            // selection resting on the floor showed nothing at all.
             var centre = new Vector3(
                 (cell.x + 0.5f) * GridCoord.StudUnits,
-                layer * GridCoord.LayerUnits,
+                layer * GridCoord.LayerUnits + thickness,
                 (cell.y + 0.5f) * GridCoord.StudUnits);
 
             marker.transform.SetPositionAndRotation(centre, Quaternion.identity);

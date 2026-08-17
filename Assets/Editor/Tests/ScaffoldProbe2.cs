@@ -18,7 +18,7 @@ namespace BlockMarbleRun.EditorTools.Tests
 
             PartDefinition pillar = Find("building_block_2x2");
 
-            foreach (string id in new[] { "u_turn_slide", "funnel_6x7", "slide_curve_4x4" })
+            foreach (string id in new[] { "funnel_6x7", "funnel_8x9" })
             {
                 PartDefinition def = Find(id);
                 if (def == null) { report.AppendLine($"{id}: missing"); continue; }

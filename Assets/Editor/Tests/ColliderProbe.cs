@@ -19,7 +19,7 @@ namespace BlockMarbleRun.EditorTools.Tests
             factory.catalog = catalog;
             factory.partMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
 
-            foreach (string id in new[] { "funnel_6x7", "funnel_6x7_mirror", "slide_curve_4x4_mirror", "u_turn_slide_mirror" })
+            foreach (string id in new[] { "stalk_2x2", "building_block_2x2" })
             {
                 PartDefinition def = null;
                 foreach (PartDefinition d in catalog.parts)

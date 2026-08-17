@@ -142,7 +142,11 @@ namespace BlockMarbleRun.Build
             }
 
             PartDefinition selected = controller.Selected;
-            GUILayout.Label($"Part: {(selected != null ? selected.displayName : "none")}", _style);
+
+            // Says when a part is being held rather than chosen, since the bar shows no selection
+            // for one that is not on it.
+            GUILayout.Label($"Part: {(selected != null ? selected.displayName : "none")}" +
+                            (controller.HoldingOffPalette ? "  (held - Q / E to let go)" : ""), _style);
             GUILayout.Label($"Placed: {controller.Map.Parts.Count}   Cells: {controller.Map.CellCount}", _style);
             GUILayout.Label(
                 $"Frame: {_smoothedMs:0.0} ms ({(_smoothedMs > 0f ? 1000f / _smoothedMs : 0f):0} fps)   " +
@@ -183,6 +187,8 @@ namespace BlockMarbleRun.Build
 
             }
             GUILayout.Label("Left click place    Shift precise    V grab (click picks, drag selects)    Del remove", _style);
+            GUILayout.Label("Right click picks a piece back up    Shift right click moves it    (right drag still orbits)",
+                            _style);
 
             if (controller.Pasting)
             {
@@ -202,10 +208,15 @@ namespace BlockMarbleRun.Build
             GUILayout.Label("S save (stamped with the time)    L saved creations    + / - raise or lower a structure" +
                             (string.IsNullOrEmpty(controller.LastTyped) ? "" : $"    (last key: {controller.LastTyped})"),
                             _style);
+
+            // Said plainly and always, because the moment it matters is after the work is gone.
+            GUILayout.Label(controller.HasAutosave
+                ? "O restore the autosave    (the build is kept automatically as you work)"
+                : "The build is kept automatically as you work - O restores it", _style);
             GUILayout.Label("Right drag orbit    Middle drag pan    Scroll zoom", _style);
             GUILayout.Label("F frame build    Home origin    Cmd+Z undo    Shift+Cmd+Z redo", _style);
             GUILayout.Label("Tab play mode    B floor: grid / sand / water", _style);
-            GUILayout.Label("Stress: T palette-mat   Y property-block(old)   U palette+sparse   G clear   K reset worst", _style);
+            GUILayout.Label("Stress: T palette-mat   Y property-block(old)   U palette+sparse   G clear (undoable)   K reset worst", _style);
 
             // Deliberately in the building HUD and not the physics panel. Scaffolding is decided when
             // a piece is placed, which only happens here - the panel could show the text but never

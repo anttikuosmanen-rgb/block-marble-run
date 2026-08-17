@@ -47,7 +47,13 @@ namespace BlockMarbleRun.EditorTools.Import
             foreach (string stlPath in paths)
             {
                 string name = Path.GetFileNameWithoutExtension(stlPath);
-                PartAnalysis analysis = PartAnalysis.Analyse(stlPath);
+                // A stalk is solid for one layer and leaves above that. Measured whole it claims a
+                // two-by-two, because its fronds spread that far - and four of them will not go into
+                // one brick, which is exactly what they are for.
+                bool isSoft = name.StartsWith("stalk");
+
+                PartAnalysis analysis = PartAnalysis.Analyse(
+                    stlPath, isSoft ? PartAnalysis.LayerHeightMm : 0f);
 
                 PartDefinition def = LoadOrCreate(name, ref created, ref updated);
 
@@ -108,8 +114,11 @@ namespace BlockMarbleRun.EditorTools.Import
 
             // Pillars too: their mesh is the template a support column of any height is cut from, so
             // it has to be readable at runtime even though nothing collides against the original.
+            // Soft parts too: their mesh is bent at runtime, which means reading it.
+            string name = System.IO.Path.GetFileNameWithoutExtension(stlPath);
+
             bool wanted = analysis.Ports.Count > 0 || analysis.HasTunnel ||
-                          System.IO.Path.GetFileNameWithoutExtension(stlPath).StartsWith("pillar");
+                          name.StartsWith("pillar") || name.StartsWith("stalk");
             if (importer.readable == wanted)
                 return;
 
@@ -133,6 +142,23 @@ namespace BlockMarbleRun.EditorTools.Import
             def.id = name;
             def.displayName = Prettify(name);
             def.category = GuessCategory(name);
+
+            // Set once, at creation, like the category - so a decision made by hand afterwards is
+            // not overwritten on the next import.
+            def.soft = name.StartsWith("stalk");
+
+            if (def.soft)
+            {
+                // Solid for one layer - the stem - and green. A plant comes out green whatever
+                // colour the player happens to be building in; painting it afterwards still works.
+                def.softBodyLayers = 1;
+                def.defaultColorIndex = 3;
+
+                // Half a stud up. The flanges around its underside straddle the stud rather than
+                // perching on top of it, so it settles about halfway down.
+                def.verticalOffsetUnits = PartAnalysis.StudHeightMm * 0.5f * 0.01f;
+            }
+
             AssetDatabase.CreateAsset(def, path);
             created++;
             return def;
