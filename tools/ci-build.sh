@@ -31,9 +31,17 @@ runner_pid=$!
 # Whatever happens after this - a failed build, a Ctrl-C, an error in this script - the runner goes
 # down. That is the whole point of the script, so it is a trap rather than a line at the end.
 cleanup() {
+  # run.sh is a wrapper: killing it leaves Runner.Listener alive and still taking jobs, which is the
+  # opposite of what this script is for. Kill the child too, then confirm nothing is left.
   kill "$runner_pid" 2>/dev/null || true
+  pkill -f "$runner_dir/bin/Runner.Listener" 2>/dev/null || true
   wait "$runner_pid" 2>/dev/null || true
-  echo "Runner stopped."
+
+  if pgrep -f "Runner.Listener" > /dev/null; then
+    echo "WARNING: a Runner.Listener is still running - kill it by hand." >&2
+  else
+    echo "Runner stopped."
+  fi
 }
 trap cleanup EXIT
 
