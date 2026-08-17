@@ -60,6 +60,8 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestStudsAreFoundByHeightAboveTheGrid();
             TestPointerTrustRecoversAfterAJump();
             TestPointerTrustRecoversAfterAResolutionChange();
+            TestFunnelsHaveADropHoleAndOthersDoNot();
+            TestMirrorsKeepTheirDropHole();
             TestABowlIsNotMistakenForStuds();
             TestALiftedPillarIsRecutRatherThanStackedOn();
             TestALiftedScaffoldBrickBecomesAPillar();
@@ -723,6 +725,80 @@ namespace BlockMarbleRun.EditorTools.Tests
             now += 0.016f;
             Check("with movement judged at the new size",
                   !trust.IsSuspect(new Vector2(1750f, 1240f), full, now));
+        }
+
+        /// <summary>
+        /// A funnel has a hole a ball fits through; nothing else in the set claims one.
+        ///
+        /// Both u-turns enclose a gap between their arms that is genuinely open from top to bottom,
+        /// so "no material above" is not the test - the gap is 18 mm across against a 24.5 mm ball,
+        /// and marking it would draw a target on the one place a ball cannot go.
+        /// </summary>
+        static void TestFunnelsHaveADropHoleAndOthersDoNot()
+        {
+            foreach (string guid in AssetDatabase.FindAssets("t:PartDefinition"))
+            {
+                var def = AssetDatabase.LoadAssetAtPath<PartDefinition>(
+                    AssetDatabase.GUIDToAssetPath(guid));
+
+                if (def == null)
+                    continue;
+
+                bool funnel = def.id.StartsWith("funnel");
+
+                if (funnel)
+                {
+                    // In world units, where a unit is 10 cm: the ball is 0.245 across.
+                    Check($"{def.id} has a hole", def.dropHoleRadiusUnits > 0f);
+                    Check($"{def.id}'s hole passes a ball",
+                          def.dropHoleRadiusUnits * 2f >= 0.245f,
+                          $"{def.dropHoleRadiusUnits * 200f:0.#} mm across");
+                }
+                else
+                {
+                    Check($"{def.id} has no hole", def.dropHoleRadiusUnits <= 0f,
+                          $"claims {def.dropHoleRadiusUnits * 200f:0.#} mm across");
+                }
+            }
+        }
+
+        /// <summary>
+        /// A mirrored funnel's hole is mirrored with it.
+        ///
+        /// The same omission as the layer masks and the tunnel flag before it, and with the same
+        /// shape of consequence: the piece looks right, places right, and points at the wrong spot.
+        /// </summary>
+        static void TestMirrorsKeepTheirDropHole()
+        {
+            foreach (string guid in AssetDatabase.FindAssets("t:PartDefinition"))
+            {
+                var def = AssetDatabase.LoadAssetAtPath<PartDefinition>(
+                    AssetDatabase.GUIDToAssetPath(guid));
+
+                if (def == null || string.IsNullOrEmpty(def.mirrorOf))
+                    continue;
+
+                PartDefinition source = null;
+
+                foreach (string other in AssetDatabase.FindAssets("t:PartDefinition"))
+                {
+                    var candidate = AssetDatabase.LoadAssetAtPath<PartDefinition>(
+                        AssetDatabase.GUIDToAssetPath(other));
+
+                    if (candidate != null && candidate.id == def.mirrorOf)
+                        source = candidate;
+                }
+
+                if (source == null)
+                    continue;
+
+                Check($"{def.id} keeps its source's hole size",
+                      Mathf.Approximately(def.dropHoleRadiusUnits, source.dropHoleRadiusUnits));
+
+                Check($"{def.id}'s hole is mirrored in x",
+                      Mathf.Approximately(def.dropHoleOffsetUnits.x, -source.dropHoleOffsetUnits.x) &&
+                      Mathf.Approximately(def.dropHoleOffsetUnits.y, source.dropHoleOffsetUnits.y));
+            }
         }
 
         static void Check(string what, bool condition, string detail = null)

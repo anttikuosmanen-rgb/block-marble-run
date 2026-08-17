@@ -30,6 +30,9 @@ namespace BlockMarbleRun.EditorTools.Import
         public const float StudHeightMm = 4.6f;
         public const float ClearanceMm = 0.2f;
 
+        /// <summary>The ball these channels are built for. What counts as a hole is measured against it.</summary>
+        public const float BallDiameterMm = 24.5f;
+
         public string SourcePath;
         public Vector3 SizeMm;
         public Vector3 MinMm;
@@ -84,6 +87,26 @@ namespace BlockMarbleRun.EditorTools.Import
 
         /// <summary>The underside arches clear of the base and opens out at an edge - a ball can pass under.</summary>
         public bool HasTunnel;
+
+        /// <summary>
+        /// Middle of the vertical shaft through the part, in mesh millimetres, and how wide it is.
+        ///
+        /// A funnel's whole purpose is the hole in the middle of it, and where that hole lands is the
+        /// one thing the player is aiming at while placing one. Zero radius means the part has none.
+        /// </summary>
+        public Vector2 DropHoleCentreMm;
+
+        public float DropHoleRadiusMm;
+
+        /// <summary>Width and depth of the shaft's own bounding box, and how much of it it fills.</summary>
+        public Vector2 DropHoleExtentMm;
+
+        public float DropHoleFill;
+
+        /// <summary>The shaft's samples, kept for the socket derivation. Null when there is no shaft.</summary>
+        bool[] _holeSamples;
+        int _holeW;
+        int _holeH;
 
         public MirrorVerdict MirrorVerdict;
         public float MirrorScore;
@@ -151,6 +174,7 @@ namespace BlockMarbleRun.EditorTools.Import
             a.DerivePivot();
             a.DeriveLayerMasks(facets);
             a.DeriveTopStuds(facets);
+            a.DeriveDropHole(facets);
             a.DeriveBottomSockets(facets);
             a.DerivePorts(facets);
             a.DeriveTunnel(facets);
@@ -524,6 +548,253 @@ namespace BlockMarbleRun.EditorTools.Import
         }
 
         /// <summary>
+        /// Finds the shaft a ball falls through: a column of the part, away from its edges, that no
+        /// triangle covers at any height.
+        ///
+        /// Seen from above rather than from any single height, which is what makes it a shaft and not
+        /// merely a dip. The funnel's bowl slopes inward, so at the top the opening is wide and near
+        /// the bottom it is a throat; only the throat is open all the way through, and the throat is
+        /// what the ball actually has to be over.
+        ///
+        /// Occupancy could not answer this. The masks are per cell, and at the throat the sloping
+        /// wall passes through the same cells as the hole, so every one of them reads as solid.
+        /// </summary>
+        void DeriveDropHole(List<StlFacet> facets)
+        {
+            DropHoleRadiusMm = 0f;
+            DropHoleCentreMm = Vector2.zero;
+            _holeSamples = null;
+
+            int w = Mathf.CeilToInt(SizeMm.x / HeightMapRes) + 1;
+            int h = Mathf.CeilToInt(SizeMm.y / HeightMapRes) + 1;
+
+            if (w <= 2 || h <= 2)
+                return;
+
+            var solid = new bool[w * h];
+
+            foreach (StlFacet f in facets)
+            {
+                float minX = Mathf.Min(f.A.x, Mathf.Min(f.B.x, f.C.x));
+                float maxX = Mathf.Max(f.A.x, Mathf.Max(f.B.x, f.C.x));
+                float minY = Mathf.Min(f.A.y, Mathf.Min(f.B.y, f.C.y));
+                float maxY = Mathf.Max(f.A.y, Mathf.Max(f.B.y, f.C.y));
+
+                int i0 = Mathf.Clamp(Mathf.FloorToInt((minX - MinMm.x) / HeightMapRes), 0, w - 1);
+                int i1 = Mathf.Clamp(Mathf.CeilToInt((maxX - MinMm.x) / HeightMapRes), 0, w - 1);
+                int j0 = Mathf.Clamp(Mathf.FloorToInt((minY - MinMm.y) / HeightMapRes), 0, h - 1);
+                int j1 = Mathf.Clamp(Mathf.CeilToInt((maxY - MinMm.y) / HeightMapRes), 0, h - 1);
+
+                for (int i = i0; i <= i1; i++)
+                for (int j = j0; j <= j1; j++)
+                {
+                    float x = MinMm.x + i * HeightMapRes;
+                    float y = MinMm.y + j * HeightMapRes;
+
+                    // Exact, not the bounding box: a box fill closes the hole from the outside in,
+                    // since the triangles of the sloping wall around it span right across the throat.
+                    if (Covers(f, x, y, out _))
+                        solid[j * w + i] = true;
+                }
+            }
+
+            // Everything open that can be reached from outside the part is outside the part. What is
+            // left is enclosed by geometry on every side, which is what a shaft is.
+            var outside = new bool[w * h];
+            var queue = new Queue<int>();
+
+            for (int i = 0; i < w; i++)
+            {
+                Seed(j: 0, i, w, solid, outside, queue);
+                Seed(j: h - 1, i, w, solid, outside, queue);
+            }
+
+            for (int j = 0; j < h; j++)
+            {
+                Seed(j, i: 0, w, solid, outside, queue);
+                Seed(j, i: w - 1, w, solid, outside, queue);
+            }
+
+            while (queue.Count > 0)
+            {
+                int index = queue.Dequeue();
+                int i = index % w;
+                int j = index / w;
+
+                if (i > 0) Seed(j, i - 1, w, solid, outside, queue);
+                if (i < w - 1) Seed(j, i + 1, w, solid, outside, queue);
+                if (j > 0) Seed(j - 1, i, w, solid, outside, queue);
+                if (j < h - 1) Seed(j + 1, i, w, solid, outside, queue);
+            }
+
+            // The largest enclosed region. A moulded part has small ones too - the inside of every
+            // antistud tube is a hole through nothing but air - and the shaft is the one worth
+            // pointing at, so they are separated by size rather than by a guess about position.
+            var region = new List<int>();
+            var best = new List<int>();
+            var visited = new bool[w * h];
+
+            for (int start = 0; start < solid.Length; start++)
+            {
+                if (solid[start] || outside[start] || visited[start])
+                    continue;
+
+                region.Clear();
+                queue.Enqueue(start);
+                visited[start] = true;
+
+                while (queue.Count > 0)
+                {
+                    int index = queue.Dequeue();
+                    region.Add(index);
+
+                    int i = index % w;
+                    int j = index / w;
+
+                    if (i > 0) Visit(index - 1, solid, outside, visited, queue);
+                    if (i < w - 1) Visit(index + 1, solid, outside, visited, queue);
+                    if (j > 0) Visit(index - w, solid, outside, visited, queue);
+                    if (j < h - 1) Visit(index + w, solid, outside, visited, queue);
+                }
+
+                if (region.Count > best.Count)
+                {
+                    best.Clear();
+                    best.AddRange(region);
+                }
+            }
+
+            float area = best.Count * HeightMapRes * HeightMapRes;
+            float radius = Mathf.Sqrt(area / Mathf.PI);
+
+            if (best.Count == 0)
+                return;
+
+            float sx = 0f, sy = 0f;
+
+            foreach (int index in best)
+            {
+                sx += MinMm.x + index % w * HeightMapRes;
+                sy += MinMm.y + index / w * HeightMapRes;
+            }
+
+            float holeMinX = float.MaxValue, holeMaxX = float.MinValue;
+            float holeMinY = float.MaxValue, holeMaxY = float.MinValue;
+
+            foreach (int index in best)
+            {
+                float x = MinMm.x + index % w * HeightMapRes;
+                float y = MinMm.y + index / w * HeightMapRes;
+
+                holeMinX = Mathf.Min(holeMinX, x); holeMaxX = Mathf.Max(holeMaxX, x);
+                holeMinY = Mathf.Min(holeMinY, y); holeMaxY = Mathf.Max(holeMaxY, y);
+            }
+
+            DropHoleExtentMm = new Vector2(holeMaxX - holeMinX + HeightMapRes,
+                                           holeMaxY - holeMinY + HeightMapRes);
+            DropHoleFill = area / Mathf.Max(0.001f, DropHoleExtentMm.x * DropHoleExtentMm.y);
+
+            // Whether this is a hole a ball drops through, which is the only kind worth pointing at.
+            //
+            // Measured against the ball rather than against a shape, because that is the actual
+            // question. Both u-turns enclose a gap between their arms that is open from top to
+            // bottom - the detector is right that it is a shaft - but it is 18 mm across and the ball
+            // is 24.5, so nothing will ever go down it. The funnels' throats are 28 mm and round.
+            //
+            // The narrow side is what decides it: a slot is as passable as its width, however long it
+            // is. Aspect is checked as well, so a wide slot cannot creep in on width alone.
+            float narrow = Mathf.Min(DropHoleExtentMm.x, DropHoleExtentMm.y);
+            float wide = Mathf.Max(DropHoleExtentMm.x, DropHoleExtentMm.y);
+
+            if (narrow < BallDiameterMm || wide > narrow * 1.5f)
+            {
+                DropHoleExtentMm = Vector2.zero;
+                DropHoleFill = 0f;
+                return;
+            }
+
+            DropHoleCentreMm = new Vector2(sx / best.Count, sy / best.Count);
+            DropHoleRadiusMm = radius;
+
+            var samples = new bool[w * h];
+            foreach (int index in best)
+                samples[index] = true;
+
+            _holeSamples = samples;
+            _holeW = w;
+            _holeH = h;
+        }
+
+        static void Seed(int j, int i, int w, bool[] solid, bool[] outside, Queue<int> queue)
+        {
+            int index = j * w + i;
+
+            if (solid[index] || outside[index])
+                return;
+
+            outside[index] = true;
+            queue.Enqueue(index);
+        }
+
+        static void Visit(int index, bool[] solid, bool[] outside, bool[] visited, Queue<int> queue)
+        {
+            if (solid[index] || outside[index] || visited[index])
+                return;
+
+            visited[index] = true;
+            queue.Enqueue(index);
+        }
+
+        /// <summary>
+        /// Whether the shaft takes up the place a stud would stand in this cell.
+        ///
+        /// The underside around a funnel's throat is flat and at the base plane, so by area alone the
+        /// cells over the hole look exactly like cells with an antistud - and the mask claimed the
+        /// funnel could be clutched down onto studs it would fall straight past. What decides it is
+        /// not how much material the cell has but whether there is any where the stud goes.
+        /// </summary>
+        bool ShaftBlocksTheStud(int cx, int cy)
+        {
+            if (_holeSamples == null)
+                return false;
+
+            // A stud is 9.5 mm across on a 16 mm pitch, in the middle of its cell.
+            const float studRadiusMm = 4.75f;
+
+            float centreX = MinMm.x + (cx + 0.5f) * StudPitchMm;
+            float centreY = MinMm.y + (cy + 0.5f) * StudPitchMm;
+
+            int inside = 0;
+            int hole = 0;
+
+            int reach = Mathf.CeilToInt(studRadiusMm / HeightMapRes);
+
+            int i0 = Mathf.FloorToInt((centreX - MinMm.x) / HeightMapRes);
+            int j0 = Mathf.FloorToInt((centreY - MinMm.y) / HeightMapRes);
+
+            for (int i = i0 - reach; i <= i0 + reach; i++)
+            for (int j = j0 - reach; j <= j0 + reach; j++)
+            {
+                if (i < 0 || j < 0 || i >= _holeW || j >= _holeH)
+                    continue;
+
+                float x = MinMm.x + i * HeightMapRes;
+                float y = MinMm.y + j * HeightMapRes;
+
+                if ((x - centreX) * (x - centreX) + (y - centreY) * (y - centreY) > studRadiusMm * studRadiusMm)
+                    continue;
+
+                inside++;
+                if (_holeSamples[j * _holeW + i])
+                    hole++;
+            }
+
+            // A third of the stud gone is enough. A stud only half over a hole has nothing to grip
+            // with, and a cell the shaft merely clips at its rim keeps its antistud.
+            return inside > 0 && hole >= inside * 0.34f;
+        }
+
+        /// <summary>
         /// Which cells have an antistud: the ones whose underside is flat against the part's base.
         ///
         /// Derived rather than assumed. It used to be a copy of the footprint - every cell the part
@@ -648,7 +919,11 @@ namespace BlockMarbleRun.EditorTools.Import
                 foreach (KeyValuePair<int, int> at in flatAt[cell])
                     best = Mathf.Max(best, at.Value);
 
-                BottomSockets[cell] = best >= covered[cell] * requiredShare;
+                int cx = cell % FootprintSize.x;
+                int cy = cell / FootprintSize.x;
+
+                BottomSockets[cell] = best >= covered[cell] * requiredShare &&
+                                      !ShaftBlocksTheStud(cx, cy);
             }
         }
 

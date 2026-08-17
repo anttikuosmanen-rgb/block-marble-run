@@ -315,10 +315,32 @@ antistuds in the middle of its slope.
 A cell is a socket when at least **15 %** of its area is flat underside at the part's base. Not a
 majority: a funnel's lip cell is mostly opening.
 
+**A cell over the hole is not an antistud.** A funnel's underside is flat and at the base plane all
+round its throat, so by area alone the cells over the hole looked exactly like cells with an antistud,
+and the mask claimed the funnel could clutch down onto studs it would fall straight past. What decides
+it is not how much material the cell has but whether there is any where the stud goes: the shaft is
+tested against the central 9.5 mm of the cell, and a third of that gone is enough to refuse it.
+
 **The masks are checked by eye, once, in text.** `PartMaskReport` writes `PartMasks.txt` — every part
 as an ASCII grid, `T` stud, `o` antistud, `B` both, `.` neither, `-` outside the footprint. Reading
 thirty-seven small diagrams found three real errors that no amount of looking at the 3-D view had, and
 it is regenerated whenever the derivation changes.
+
+### 3.5.1 Finding the hole a ball drops through
+
+A funnel is placed by where its hole lands and by nothing else, so the hole has to be data. It is
+found from above: samples that no triangle covers at any height, flood-filled from the border so that
+what remains is enclosed by geometry on every side.
+
+Occupancy could not answer it. The masks are per cell, and at the throat the sloping wall passes
+through the same cells as the hole, so every one of them reads as solid.
+
+**What separates a hole from a gap is the ball, not the shape.** Both u-turns enclose a slot between
+their arms that is genuinely open from top to bottom - the detector is right about that - and marking
+it would draw a target on the one place a ball cannot go, because the slot is **18 mm** across against
+a **24.5 mm** ball. The funnels' throats are **28 mm** and round. So the test is the narrow side of
+the shaft against the ball's diameter, with an aspect check so a long slot cannot creep in on width
+alone. Measuring "is there material above it" separates neither: there is none in either case.
 
 ### 3.6 Plates are generated, not modelled
 
@@ -559,6 +581,13 @@ surface: a line down the centre of a stud is hidden by the stud. Anchors are cho
 channel mouths first, then studs, then sockets, then the outline — because a mouth is the connection
 the player is aiming at, and because a piece with no studs at all still needs the vertical reference
 that says where it is in space.
+
+**A funnel gets a line down its hole and a circle where it lands.** The corner lines say where the
+piece is; this says where the ball will go, which for a funnel is the whole question. It is drawn from
+the shaft (§3.5.1) rather than from the outline, because the two are not the same place - the throat
+of a 10x10 funnel is a long way inside its footprint - and the circle is the hole's own width, so
+lining it up with a channel mouth below is a matter of covering one with the other. A ring of short
+bars rather than a disc: a disc hides the thing being aimed at.
 
 Guides run for the ghost, for a grab-mode selection, and for a pasted group, which is the case that
 needs them most: a pasted group can be raised and lowered, and it is the only one where every mouth

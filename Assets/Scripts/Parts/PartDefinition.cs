@@ -158,6 +158,18 @@ namespace BlockMarbleRun.Parts
         [Tooltip("True when the underside arches into a through-tunnel, as bridge_2x3 does. Such a part needs its real geometry for collision.")]
         public bool hasTunnel;
 
+        /// <summary>
+        /// Where the shaft through the part is, measured from the part's own pivot in world units,
+        /// and how wide it is. Radius zero means the part has no shaft.
+        ///
+        /// A funnel is placed by where its hole lands, and that is the one thing a ghost floating in
+        /// the air cannot show: the hole is inside the piece and the surface it has to line up with
+        /// is underneath. The build guides draw it down onto whatever is below (AlignmentGuides).
+        /// </summary>
+        public Vector2 dropHoleOffsetUnits;
+
+        public float dropHoleRadiusUnits;
+
         [Tooltip("Row-major: which cells expose a stud on top. Empty means nothing can stack on this part.")]
         public bool[] topStuds;
 

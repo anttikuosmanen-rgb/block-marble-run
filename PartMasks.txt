@@ -2,7 +2,7 @@ Studs and antistuds, as derived from each part's geometry.
 
   T  stud on top          o  antistud underneath
   B  both                 .  part of the piece, neither
-  -  outside the piece's footprint
+  -  outside the piece's footprint   O  the hole a ball drops through
 
 Rows run with +y upward, columns with +x rightward, as the part sits
 unrotated. Grid layers are half a brick: a brick is 2, a plate 1.
@@ -198,14 +198,14 @@ funnel_10x10
     - . . . o o . . o o 
     . . . . . . . . o o 
     . . . . . . . . . . 
-    o o . . o o . . o o 
-    o o . . o o . . o o 
+    o o . . O O . . o o 
+    o o . . O O . . o o 
     . . . . . . . . . . 
     . . . . . . . . . . 
     - . . . o o . . . - 
     - - . . o o . . - - 
 
-    2 stud cell(s), 26 antistud cell(s)
+    2 stud cell(s), 22 antistud cell(s)
 
 ============================================================
 funnel_10x10_mirror
@@ -215,14 +215,14 @@ funnel_10x10_mirror
     o o . . o o . . . - 
     o o . . . . . . . . 
     . . . . . . . . . . 
-    o o . . o o . . o o 
-    o o . . o o . . o o 
+    o o . . O O . . o o 
+    o o . . O O . . o o 
     . . . . . . . . . . 
     . . . . . . . . . . 
     - . . . o o . . . - 
     - - . . o o . . - - 
 
-    2 stud cell(s), 26 antistud cell(s)
+    2 stud cell(s), 22 antistud cell(s)
 
 ============================================================
 funnel_6x7
@@ -231,12 +231,12 @@ funnel_6x7
     - - - - B B 
     . . o o o o 
     . . o o . - 
-    o o o o o o 
-    o o o o o o 
+    o o O O o o 
+    o o O O o o 
     . . o o . . 
     . . o o . . 
 
-    2 stud cell(s), 24 antistud cell(s)
+    2 stud cell(s), 20 antistud cell(s)
 
 ============================================================
 funnel_6x7_mirror
@@ -245,12 +245,12 @@ funnel_6x7_mirror
     B B - - - - 
     o o o o . . 
     - . o o . . 
-    o o o o o o 
-    o o o o o o 
+    o o O O o o 
+    o o O O o o 
     . . o o . . 
     . . o o . . 
 
-    2 stud cell(s), 24 antistud cell(s)
+    2 stud cell(s), 20 antistud cell(s)
 
 ============================================================
 funnel_8x9
@@ -260,13 +260,13 @@ funnel_8x9
     - . . o o . o o 
     . . . o o . o o 
     . . . . . . . - 
-    o o . o o . o o 
-    o o . o o . o o 
+    o o . O O . o o 
+    o o . O O . o o 
     . . . . . . . . 
     . . . o o . . . 
     - . . o o . . - 
 
-    2 stud cell(s), 26 antistud cell(s)
+    2 stud cell(s), 22 antistud cell(s)
 
 ============================================================
 funnel_8x9_mirror
@@ -276,13 +276,13 @@ funnel_8x9_mirror
     o o . o o . . - 
     o o . o o . . . 
     - . . . . . . . 
-    o o . o o . o o 
-    o o . o o . o o 
+    o o . O O . o o 
+    o o . O O . o o 
     . . . . . . . . 
     . . . o o . . . 
     - . . o o . . - 
 
-    2 stud cell(s), 26 antistud cell(s)
+    2 stud cell(s), 22 antistud cell(s)
 
 ============================================================
 pillar_2x2x10

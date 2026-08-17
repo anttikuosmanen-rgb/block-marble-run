@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using BlockMarbleRun.Grid;
 using BlockMarbleRun.Parts;
 using UnityEditor;
 using UnityEngine;
@@ -28,7 +29,7 @@ namespace BlockMarbleRun.EditorTools.Tests
             report.AppendLine();
             report.AppendLine("  T  stud on top          o  antistud underneath");
             report.AppendLine("  B  both                 .  part of the piece, neither");
-            report.AppendLine("  -  outside the piece's footprint");
+            report.AppendLine("  -  outside the piece's footprint   O  the hole a ball drops through");
             report.AppendLine();
             report.AppendLine("Rows run with +y upward, columns with +x rightward, as the part sits");
             report.AppendLine("unrotated. Grid layers are half a brick: a brick is 2, a plate 1.");
@@ -50,6 +51,20 @@ namespace BlockMarbleRun.EditorTools.Tests
 
             File.WriteAllText(Path, report.ToString());
             Debug.Log($"[Masks] wrote {parts.Count} parts to {Path}");
+        }
+
+        /// <summary>Whether a cell's middle falls inside the part's drop hole.</summary>
+        static bool InHole(PartDefinition def, int x, int y)
+        {
+            if (def.dropHoleRadiusUnits <= 0f)
+                return false;
+
+            Vector2 centre = new Vector2(def.footprintSize.x * 0.5f, def.footprintSize.y * 0.5f) *
+                             GridCoord.StudUnits + def.dropHoleOffsetUnits;
+
+            var cell = new Vector2((x + 0.5f) * GridCoord.StudUnits, (y + 0.5f) * GridCoord.StudUnits);
+
+            return (cell - centre).magnitude < def.dropHoleRadiusUnits;
         }
 
         static void Write(StringBuilder report, PartDefinition def)
@@ -83,7 +98,12 @@ namespace BlockMarbleRun.EditorTools.Tests
                     if (stud) studs++;
                     if (socket) sockets++;
 
-                    row.Append(!inside && !stud && !socket ? '-'
+                    // The drop hole, drawn over everything else: a cell it covers cannot carry an
+                    // antistud, so the two appearing together in the diagram is the bug this exists
+                    // to catch. Marked from the stored circle rather than from the derivation, so
+                    // what is checked by eye is what the guides will actually draw.
+                    row.Append(InHole(def, x, y) ? 'O'
+                        : !inside && !stud && !socket ? '-'
                         : stud && socket ? 'B'
                         : stud ? 'T'
                         : socket ? 'o'

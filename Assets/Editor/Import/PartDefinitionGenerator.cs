@@ -176,6 +176,15 @@ namespace BlockMarbleRun.EditorTools.Import
             def.heightLayers = analysis.HeightLayers;
             def.pivotOffsetUnits = analysis.PivotOffsetUnits;
             def.hasTunnel = analysis.HasTunnel;
+
+            // Relative to the pivot, because that is what the part is drawn around: a mesh point p
+            // lands at footprintCentre + rotation * (p - pivot), so storing the difference makes the
+            // guides' arithmetic the same rotation the piece itself gets.
+            def.dropHoleOffsetUnits = analysis.DropHoleRadiusMm > 0f
+                ? analysis.DropHoleCentreMm * 0.01f - analysis.PivotOffsetUnits
+                : Vector2.zero;
+
+            def.dropHoleRadiusUnits = analysis.DropHoleRadiusMm * 0.01f;
             def.layerMasks = analysis.LayerMasks;
             def.topStuds = analysis.TopStuds;
 
@@ -257,6 +266,8 @@ namespace BlockMarbleRun.EditorTools.Import
             def.pivotOffsetUnits = source.pivotOffsetUnits;
             def.rotation = source.rotation;
             def.hasTunnel = source.hasTunnel;
+            def.dropHoleOffsetUnits = source.dropHoleOffsetUnits;
+            def.dropHoleRadiusUnits = source.dropHoleRadiusUnits;
             def.ports = source.ports;
             def.centerline = source.centerline;
             // A plate is as handed as the brick it came from, which is to say not at all - and
@@ -329,6 +340,13 @@ namespace BlockMarbleRun.EditorTools.Import
             // geometry; without it the factory falls through to the generated brick collider, and a
             // funnel's bowl or a slide's underpass is filled in solid.
             def.hasTunnel = source.hasTunnel;
+
+            // Mirrored the same way the pivot is, and for the same reason it must not be forgotten:
+            // a hole drawn on the wrong side of a mirrored funnel points at the one place the ball
+            // will not go.
+            def.dropHoleOffsetUnits = new Vector2(-source.dropHoleOffsetUnits.x,
+                                                  source.dropHoleOffsetUnits.y);
+            def.dropHoleRadiusUnits = source.dropHoleRadiusUnits;
 
             def.footprintMask = MirrorBuilder.MirrorMask(source.footprintMask, source.footprintSize);
             def.layerMasks = MirrorBuilder.MirrorLayerMasks(source.layerMasks, source.footprintSize,

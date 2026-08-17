@@ -30,6 +30,9 @@ namespace BlockMarbleRun.Build
         [SerializeField] Color downColour = new Color(0.45f, 0.9f, 1f, 0.4f);
         [SerializeField] Color upColour = new Color(1f, 0.8f, 0.35f, 0.3f);
 
+        [Tooltip("The drop hole and the ring it lands in. Warmer than the rest, being the aim rather than the frame.")]
+        [SerializeField] Color holeColour = new Color(1f, 0.45f, 0.35f, 0.6f);
+
         readonly List<GameObject> _pieces = new();
         int _used;
 
@@ -74,6 +77,8 @@ namespace BlockMarbleRun.Build
                     Mark(cell, ceiling, upColour);
                 }
             }
+
+            ShowDropHole(map, part);
 
             for (int i = _used; i < _pieces.Count; i++)
                 _pieces[i].SetActive(false);
@@ -154,6 +159,12 @@ namespace BlockMarbleRun.Build
             if (drawn == 0)
                 FrameCorners(map, ordered);
 
+            // Every funnel in the group, whatever else was drawn. A funnel is placed by where its
+            // hole lands and by nothing else, so this is not a line the budget above should be able
+            // to spend elsewhere.
+            foreach (PlacedPart part in ordered)
+                ShowDropHole(map, part);
+
             for (int i = _used; i < _pieces.Count; i++)
                 _pieces[i].SetActive(false);
         }
@@ -218,6 +229,103 @@ namespace BlockMarbleRun.Build
                                             at.y >= (minY + maxY) * 0.5f ? 1 : 0),
                          floor, under, downColour);
             }
+        }
+
+        /// <summary>
+        /// A line straight down the middle of a funnel's hole, and a circle where it lands.
+        ///
+        /// The corner lines say where the piece is; this says where the ball will go, which for a
+        /// funnel is the only question being asked. It is drawn from the hole itself rather than from
+        /// the piece's outline because the two are not the same place - the throat of a 10x10 funnel
+        /// is a long way inside its footprint - and the circle is the hole's own width, so lining it
+        /// up with a channel mouth below is a matter of covering one with the other.
+        /// </summary>
+        void ShowDropHole(GridMap map, PlacedPart part)
+        {
+            PartDefinition def = part?.Definition;
+
+            if (def == null || def.dropHoleRadiusUnits <= 0f)
+                return;
+
+            part.GetTransform(out Vector3 position, out Quaternion rotation);
+
+            // Through the placement rotation, like the mesh itself: on a turned funnel the hole is
+            // not where the unrotated offset says it is.
+            Vector2 offset = def.dropHoleOffsetUnits;
+            Vector3 centre = position + rotation * new Vector3(offset.x, 0f, offset.y);
+
+            // Which column the hole stands over, so the drop can be traced through the build the same
+            // way a corner line is.
+            var column = new Vector2Int(
+                Mathf.FloorToInt(centre.x / GridCoord.StudUnits),
+                Mathf.FloorToInt(centre.z / GridCoord.StudUnits));
+
+            int under = part.UndersideLayerAt(column.x, column.y);
+            int floor = Below(map, part, column, under);
+
+            float bottom = floor * GridCoord.LayerUnits;
+            float top = part.TopLayerAt(column.x, column.y) * GridCoord.LayerUnits;
+
+            if (top > bottom)
+            {
+                GameObject line = Take();
+
+                line.transform.SetPositionAndRotation(
+                    new Vector3(centre.x, (bottom + top) * 0.5f, centre.z), Quaternion.identity);
+
+                line.transform.localScale =
+                    new Vector3(thickness, Mathf.Max(0.001f, top - bottom), thickness);
+
+                Tint(line, holeColour);
+                line.SetActive(true);
+            }
+
+            Ring(new Vector3(centre.x, bottom + thickness, centre.z),
+                 def.dropHoleRadiusUnits, holeColour);
+        }
+
+        /// <summary>
+        /// A circle of the hole's own size, drawn flat on the surface below it.
+        ///
+        /// Built from short bars around the circumference rather than a disc: a filled disc hides the
+        /// thing it is pointing at, which on a surface with a channel mouth in it is exactly what has
+        /// to stay visible.
+        /// </summary>
+        void Ring(Vector3 centre, float radius, Color colour)
+        {
+            const int segments = 16;
+
+            float circumference = 2f * Mathf.PI * radius;
+            float segment = circumference / segments;
+
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = i * Mathf.PI * 2f / segments;
+
+                var at = new Vector3(
+                    centre.x + Mathf.Cos(angle) * radius,
+                    centre.y,
+                    centre.z + Mathf.Sin(angle) * radius);
+
+                GameObject bar = Take();
+
+                bar.transform.SetPositionAndRotation(
+                    at, Quaternion.Euler(0f, -angle * Mathf.Rad2Deg, 0f));
+
+                // Long side along the circle, so sixteen of them read as a ring rather than as dots.
+                bar.transform.localScale = new Vector3(thickness, thickness, segment * 1.15f);
+
+                Tint(bar, colour);
+                bar.SetActive(true);
+            }
+        }
+
+        void Tint(GameObject piece, Color colour)
+        {
+            var renderer = piece.GetComponent<MeshRenderer>();
+            renderer.GetPropertyBlock(_block);
+            _block.SetColor(BaseColor, colour);
+            renderer.SetPropertyBlock(_block);
         }
 
         public void Hide()

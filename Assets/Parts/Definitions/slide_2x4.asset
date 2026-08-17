@@ -29,6 +29,8 @@ MonoBehaviour:
   heightLayers: 4
   pivotOffsetUnits: {x: 0, y: 0}
   hasTunnel: 0
+  dropHoleOffsetUnits: {x: 0, y: 0}
+  dropHoleRadiusUnits: 0
   topStuds: 0000000000000000
   bottomSockets: 0101010101010101
   rotation: 0
