@@ -845,8 +845,11 @@ the commit, which is worse than no signal at all. The workflow is kept intact wi
 `workflow_dispatch` as its trigger; adding the secrets and restoring the `push` / `pull_request`
 triggers is all that is needed to turn it back on.
 
-Note for when it is: a Personal licence is single-seat, so activating it in CI can knock the local
-editor's activation loose. GameCI has a return-licence step for that.
+Two notes for when it is. GameCI's `unity-request-activation-file` action is retired and refuses to
+run, so the activation request comes from the local editor
+(`Unity -batchmode -quit -createManualActivationFile`) and goes through Unity's manual activation
+page; the README carries the commands. And a Personal licence is single-seat, so activating it in CI
+can knock the local editor's activation loose — GameCI has a return-licence step for that.
 
 Builds run locally in the meantime — `BuildScript` is the same entry point CI calls.
 

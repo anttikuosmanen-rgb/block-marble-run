@@ -149,11 +149,24 @@ triggers are off**: `game-ci/unity-builder` runs the editor headless in Docker a
 licence in the repository secrets, and without one every push failed in under twenty seconds — a red
 mark on each commit that says nothing about the commit.
 
-To turn it back on, add `UNITY_LICENSE` (the `.ulf` file's contents), `UNITY_EMAIL` and
-`UNITY_PASSWORD` as repository secrets — see [game.ci](https://game.ci/docs/github/activation) for
-obtaining the licence file — then restore the `push` and `pull_request` triggers, which are kept in a
-comment at the top of the workflow. Pages deployment also needs Pages enabled with **GitHub Actions**
-as the source.
+To turn it back on, add three repository secrets and restore the `push` and `pull_request` triggers,
+which are kept in a comment at the top of the workflow:
+
+```bash
+# 1. produce an activation request from the installed editor
+/Applications/Unity/Hub/Editor/6000.5.8f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -nographics -quit -createManualActivationFile -logFile -
+# 2. upload the resulting Unity_v6000.5.8f1.alf at https://license.unity3d.com/manual,
+#    pick Unity Personal, and download the .ulf it returns
+# 3. hand it to GitHub
+gh secret set UNITY_LICENSE < Unity_v6000.5.8f1.ulf
+gh secret set UNITY_EMAIL       # the Unity account address
+gh secret set UNITY_PASSWORD    # its password
+```
+
+GameCI's old `unity-request-activation-file` action is retired and answers any run with "this action
+is no longer supported", so the `.alf` comes from the local editor now. Pages deployment also needs
+Pages enabled with **GitHub Actions** as the source.
 
 Note that a Personal licence is single-seat: activating it in CI can knock the local editor's
 activation loose. GameCI has a return-licence step for that.
