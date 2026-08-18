@@ -1102,7 +1102,51 @@ namespace BlockMarbleRun.Build
                 }
 
                 SlotName = slot;
+                Adopt(model);
+            }
+            catch (System.Exception e)
+            {
+                Status = $"Load failed: {e.Message}";
+                Debug.LogException(e);
+            }
+            finally
+            {
+                Busy = false;
+            }
+        }
 
+        /// <summary>
+        /// Opens a creation that ships with the build rather than one of the player's own.
+        ///
+        /// Saves are per player and, on the web, per origin - a build served on a different port sees
+        /// an empty list - so a creation meant to be part of the game cannot live in the save store.
+        /// See <see cref="BundledLevels"/>.
+        ///
+        /// The slot name is left pointing nowhere on purpose. Saving afterwards writes a new creation
+        /// of the player's own rather than pretending to write back to something inside the build.
+        /// </summary>
+        public void LoadBundled(BundledLevels.Level level)
+        {
+            if (Busy)
+                return;
+
+            SaveModel model = SaveModel.FromJson(level.Json);
+
+            if (model == null)
+            {
+                Status = $"'{level.Name}' could not be read";
+                return;
+            }
+
+            SlotName = "(none)";
+            Adopt(model);
+            Status = $"Opened '{level.Name}'";
+        }
+
+        /// <summary>Puts a loaded creation into the world, whatever it was loaded from.</summary>
+        void Adopt(SaveModel model)
+        {
+            {
                 _selection.Clear();
                 ClearInstances();
 
@@ -1126,15 +1170,6 @@ namespace BlockMarbleRun.Build
 
                 orbitCamera.Frame(_map);
                 Status = $"Loaded '{model.name}': {report}";
-            }
-            catch (System.Exception e)
-            {
-                Status = $"Load failed: {e.Message}";
-                Debug.LogException(e);
-            }
-            finally
-            {
-                Busy = false;
             }
         }
 

@@ -37,9 +37,46 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestNewerVersionStillLoads();
             TestRoleSurvivesRoundTrip();
             TestOlderSaveWithoutRoleLoads();
+            TestEveryBundledLevelLoads();
 
             string summary = $"[SaveSelfTest] {_passed} passed, {_failed} failed.\n{_log}";
             if (_failed > 0) Debug.LogError(summary); else Debug.Log(summary);
+        }
+
+        /// <summary>
+        /// Every level shipped inside the build parses, and names only parts this build has.
+        ///
+        /// A bundled level is the one save nobody can fix: it goes out with the game, and if it names
+        /// a part that has since been renamed it opens to a hole on a stranger's machine with no way
+        /// to tell them. Passing with nothing bundled is fine - the guard is for when there is.
+        /// </summary>
+        static void TestEveryBundledLevelLoads()
+        {
+            var catalog = AssetDatabase.LoadAssetAtPath<PartCatalog>("Assets/Parts/PartCatalog.asset");
+
+            foreach (BundledLevels.Level level in BundledLevels.All)
+            {
+                SaveModel model = SaveModel.FromJson(level.Json);
+
+                Check($"bundled level '{level.Name}' parses", model?.parts != null);
+
+                if (model?.parts == null || catalog == null)
+                    continue;
+
+                foreach (SavedPart part in model.parts)
+                {
+                    if (string.IsNullOrEmpty(part.id) || part.id.StartsWith(ProceduralPillars.IdPrefix))
+                        continue;
+
+                    bool known = false;
+
+                    foreach (PartDefinition def in catalog.parts)
+                        if (def != null && def.id == part.id)
+                            known = true;
+
+                    Check($"bundled level '{level.Name}' knows '{part.id}'", known);
+                }
+            }
         }
 
         static void TestRoundTripPreservesEveryPart()

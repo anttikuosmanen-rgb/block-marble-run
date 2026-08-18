@@ -843,6 +843,26 @@ The rule that falls out: a step is for a change that cannot be read correctly wi
 field (start/goal, §6.5) was added with no bump at all, because "no role" is exactly what an older
 save means by saying nothing.
 
+### 8.0.1 Levels that ship inside the build
+
+Saves are per player and, on the web, **per origin** — scheme, host *and port*. A build served on a
+different port has its own IndexedDB and therefore an empty save list; the same build on Pages has
+another. Nothing is lost when this happens, but nothing is shared either, which makes the save store
+the wrong home for a creation that is meant to be part of the game.
+
+So bundled levels are text assets under `Resources/Levels`, read at startup and listed in the browser
+alongside the player's own. Read-only, and not by protection: there is nowhere in a build to write
+back to. Opening one and saving puts a copy in the player's store, which is what an example should do.
+
+Authored by playing: the editor's save store writes real files, and an editor command copies one into
+the project with its thumbnail. **Copied rather than referenced** — a bundled level is a snapshot of a
+creation at the moment it was judged good enough to ship, and a live reference would let it change, or
+vanish, without anyone deciding that it should.
+
+The save self-test parses every bundled level and checks its part ids against the catalog. It is the
+one save nobody can repair: it goes out with the build, and a renamed part turns it into a hole on a
+stranger's machine.
+
 ### 8.1 `ISaveStore` — required by WebGL
 
 WebGL has no real filesystem; `persistentDataPath` is emscripten IDBFS and flushes asynchronously, so a returned write is not yet durable. Abstract it:

@@ -22,6 +22,9 @@ namespace BlockMarbleRun.Build
         {
             public SaveSlot Slot;
             public Texture2D Thumbnail;
+
+            /// <summary>A creation that ships with the build rather than one of the player's own.</summary>
+            public bool Bundled;
         }
 
         readonly List<Entry> _entries = new();
@@ -80,6 +83,17 @@ namespace BlockMarbleRun.Build
 
             try
             {
+                // The ones that come with the game, first and always: a player who has saved nothing
+                // still has something to open, and on the web a build served from a new address has
+                // an empty save list however much has been built before (BundledLevels).
+                foreach (BundledLevels.Level level in BundledLevels.All)
+                    _entries.Add(new Entry
+                    {
+                        Slot = new SaveSlot { name = level.Name },
+                        Thumbnail = BundledLevels.ThumbnailFor(level.Name),
+                        Bundled = true,
+                    });
+
                 SaveSlot[] slots = await saves.ListAsync();
 
                 foreach (SaveSlot slot in slots)
@@ -219,17 +233,32 @@ namespace BlockMarbleRun.Build
             if (GUILayout.Button(content, GUILayout.Width(CardWidth), GUILayout.Height(ThumbHeight)))
             {
                 Close();
-                _ = controller.LoadAsync(entry.Slot.name);
+
+                if (entry.Bundled && BundledLevels.TryFind(entry.Slot.name, out BundledLevels.Level level))
+                    controller.LoadBundled(level);
+                else
+                    _ = controller.LoadAsync(entry.Slot.name);
+
                 return;
             }
 
-            System.DateTime when = System.DateTimeOffset
-                .FromUnixTimeSeconds(entry.Slot.savedAtUnixSeconds).ToLocalTime().DateTime;
+            if (entry.Bundled)
+            {
+                // Named rather than dated, and with no Delete: it is part of the build, there is
+                // nowhere to write it back to, and a button that could not work would only puzzle.
+                GUILayout.Label(entry.Slot.name, _label);
+                GUILayout.Label("comes with the game", _label);
+            }
+            else
+            {
+                System.DateTime when = System.DateTimeOffset
+                    .FromUnixTimeSeconds(entry.Slot.savedAtUnixSeconds).ToLocalTime().DateTime;
 
-            GUILayout.Label(when.ToString("d MMM yyyy, HH:mm"), _label);
+                GUILayout.Label(when.ToString("d MMM yyyy, HH:mm"), _label);
 
-            if (GUILayout.Button("Delete", GUILayout.Width(70f)))
-                _ = DeleteAsync(entry.Slot.name);
+                if (GUILayout.Button("Delete", GUILayout.Width(70f)))
+                    _ = DeleteAsync(entry.Slot.name);
+            }
 
             GUILayout.Space(8f);
             GUILayout.EndVertical();

@@ -118,6 +118,23 @@ tessellation) and classifies each part `Redundant` / `Chiral` / `Ambiguous`. Any
 human verdict on `mirrorVerdict`, and the verdict is then remembered. **Reanalyse Mirrors** re-derives
 every verdict and deletes mirrors that are no longer justified. See DESIGN.md §3.4.
 
+## Levels that ship with the game
+
+Saves live per player, and on the web per *origin* — a build served from a different port or host sees
+an empty save list, because IndexedDB is scoped that way. So a creation meant to be part of the game
+cannot live in the save store. Bundled levels are compiled in instead:
+
+1. Play in the editor, build something, press `S` to save it
+2. **Block Marble Run → Bundle a Saved Creation** — pick the save; it is copied into
+   `Assets/Resources/Levels/` with its thumbnail
+3. It appears in the save browser (`L`) for everyone, marked "comes with the game"
+
+They are read-only, not by protection but by nature: there is nowhere in a build to write back to.
+Opening one and saving puts a copy in the player's own store, which is what you want from an example.
+
+The save self-test parses every bundled level and checks it names only parts this build has — a level
+that ships naming a renamed part opens to a hole on a stranger's machine, with no way to tell them.
+
 ## Checks
 
 ```
