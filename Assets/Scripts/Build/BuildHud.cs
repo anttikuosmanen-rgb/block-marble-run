@@ -205,7 +205,7 @@ namespace BlockMarbleRun.Build
                                 "A select all    shift click to add    R turn    M mirror", _style);
                 GUILayout.Label("Cmd/Ctrl C copy    Cmd/Ctrl V paste under the cursor    Del remove", _style);
             }
-            GUILayout.Label("S save (stamped with the time)    L saved creations    + / - raise or lower a structure" +
+            GUILayout.Label("S save (stamped with the time)    L saved creations    Shift+X export a file    + / - raise or lower a structure" +
                             (string.IsNullOrEmpty(controller.LastTyped) ? "" : $"    (last key: {controller.LastTyped})"),
                             _style);
 

@@ -130,6 +130,29 @@ namespace BlockMarbleRun.Build
             }
         }
 
+        async Awaitable ExportAsync(string slot)
+        {
+            SaveService saves = controller?.Saves;
+            if (saves == null)
+                return;
+
+            _status = $"Exporting '{slot}'...";
+
+            try
+            {
+                string where = await saves.ExportAsync(slot);
+
+                _status = where == null
+                    ? $"Could not export '{slot}'"
+                    : $"Exported to {where}";
+            }
+            catch (System.Exception e)
+            {
+                _status = $"Could not export '{slot}': {e.Message}";
+                Debug.LogException(e);
+            }
+        }
+
         async Awaitable DeleteAsync(string slot)
         {
             SaveService saves = controller != null ? controller.Service : null;
@@ -256,8 +279,18 @@ namespace BlockMarbleRun.Build
 
                 GUILayout.Label(when.ToString("d MMM yyyy, HH:mm"), _label);
 
+                GUILayout.BeginHorizontal();
+
                 if (GUILayout.Button("Delete", GUILayout.Width(70f)))
                     _ = DeleteAsync(entry.Slot.name);
+
+                // Out of the game as a file. A creation is otherwise trapped in the origin it was
+                // built in - another port cannot see it, and neither can the editor - so this is the
+                // way to move one, and the way to get one into the levels that ship with the build.
+                if (GUILayout.Button("Export", GUILayout.Width(70f)))
+                    _ = ExportAsync(entry.Slot.name);
+
+                GUILayout.EndHorizontal();
             }
 
             GUILayout.Space(8f);

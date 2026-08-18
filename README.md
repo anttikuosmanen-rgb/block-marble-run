@@ -43,6 +43,7 @@ right height, undoable in the same step as the piece itself.
 | `Cmd/Ctrl C` `V` | copy · paste (first click places the group, second commits it) |
 | `+` `-` | raise or lower a structure |
 | `S` `L` | save · saved creations |
+| `Shift+X` | export the build as a `.json` file (also per-save in the browser) |
 | `O` | restore the autosave (the build is kept automatically as you work) |
 | `F` `Home` | frame the build · return to origin |
 | `B` | floor: grid / sand / water |
@@ -124,7 +125,9 @@ Saves live per player, and on the web per *origin* — a build served from a dif
 an empty save list, because IndexedDB is scoped that way. So a creation meant to be part of the game
 cannot live in the save store. Bundled levels are compiled in instead:
 
-1. Play in the editor, build something, press `S` to save it
+1. Build the level. In the editor, press `S` — that writes a real file. In a browser build, press
+   `Shift+X` (or **Export** on a card in the save browser) to download the `.json`, since browser
+   saves live in IndexedDB and have no file to pick
 2. **Block Marble Run → Bundle a Saved Creation** — pick the save; it is copied into
    `Assets/Resources/Levels/` with its thumbnail
 3. It appears in the save browser (`L`) for everyone, marked "comes with the game"

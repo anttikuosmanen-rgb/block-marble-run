@@ -883,7 +883,25 @@ All call sites are async from day one — retrofitting async onto a synchronous 
 
 ### 8.2 Sharing
 
-Export/import a creation as a `.json` file (gzip + base64 for short share codes). On WebGL this needs a `.jslib` plugin: `Blob` + object URL for download, `<input type="file">` for import. Same `ISaveStore`-adjacent seam, separate `ICreationTransfer` interface.
+**Export is built.** A creation leaves as a `.json` file: on the desktop a real file under
+`persistentDataPath/exports`, on WebGL a `Blob` handed to the browser as a download, behind
+`ICreationTransfer` - separate from `ISaveStore` because a store is where creations live and this is
+how one leaves.
+
+It earns its place beyond sharing. Saves are scoped per origin (§8.0.1), so a creation built on one
+port cannot be opened from another, and nothing built in a browser can be reached from the editor at
+all - which is where a level has to be to ship with the build. A file crosses every one of those
+boundaries, and it is what the bundling tool reads.
+
+Two details from the browser side, both learned from the way downloads fail rather than error: the
+anchor must be in the document before it is clicked, or Firefox ignores it silently; and the object
+URL must not be revoked immediately, or Safari - which has not finished reading the blob when
+`click()` returns - downloads zero bytes.
+
+What is exported is re-serialised from the loaded model rather than copied out of the store, so a save
+written by an older build is migrated on the way out and what leaves is always in the current shape.
+
+Import - and the gzip + base64 share code - is still unbuilt.
 
 ---
 

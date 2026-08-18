@@ -128,6 +128,26 @@ namespace BlockMarbleRun.Persistence
             return report;
         }
 
+        /// <summary>
+        /// The creation as a file, handed to the player (DESIGN.md 8.2).
+        ///
+        /// Re-serialised from the loaded model rather than copied byte for byte out of the store: a
+        /// save written by an older build is migrated on the way through, so what leaves is always in
+        /// the current shape and can be bundled or loaded anywhere without a second migration.
+        /// </summary>
+        public async Awaitable<string> ExportAsync(string slot)
+        {
+            SaveModel model = await LoadAsync(slot);
+
+            return model == null ? null : _transfer.Export(model.name ?? slot, model.ToJson());
+        }
+
+        /// <summary>The build as it stands, without saving it first.</summary>
+        public string Export(GridMap map, string name) =>
+            _transfer.Export(name, Capture(map, name).ToJson());
+
+        readonly ICreationTransfer _transfer = CreationTransfer.Create();
+
         public async Awaitable<SaveModel> LoadAsync(string slot)
         {
             string json = await _store.LoadAsync(slot);

@@ -470,6 +470,12 @@ namespace BlockMarbleRun.Build
             if (keyboard.sKey.wasPressedThisFrame)
                 _ = SaveAsync();
 
+            // Out as a file, the build in hand, without saving it first. A creation is otherwise
+            // trapped in the origin it was built in: another port cannot see it, and neither can the
+            // editor, which is where a level has to be to ship with the game.
+            if (keyboard.xKey.wasPressedThisFrame && keyboard.leftShiftKey.isPressed)
+                ExportCurrent();
+
             // L opens the browser rather than loading anything: with saves named by their moment
             // there is no one obvious creation to reopen, and picking the newest silently would be
             // wrong exactly when the player wants an older one.
@@ -1113,6 +1119,21 @@ namespace BlockMarbleRun.Build
             {
                 Busy = false;
             }
+        }
+
+        /// <summary>Hands the player the build in hand as a file (DESIGN.md 8.2).</summary>
+        public void ExportCurrent()
+        {
+            if (_saves == null || _map.CellCount == 0)
+            {
+                Status = "Nothing to export";
+                return;
+            }
+
+            string name = SlotName is null or "(none)" ? "Creation" : SlotName;
+            string where = _saves.Export(_map, name);
+
+            Status = where == null ? "Could not export" : $"Exported to {where}";
         }
 
         /// <summary>
