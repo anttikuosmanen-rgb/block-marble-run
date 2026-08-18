@@ -25,6 +25,15 @@ namespace BlockMarbleRun.Build
 
             /// <summary>A creation that ships with the build rather than one of the player's own.</summary>
             public bool Bundled;
+
+            /// <summary>
+            /// Whether the picture was made here, and so is this browser's to destroy.
+            ///
+            /// A user save's thumbnail is decoded from bytes each time the list is read; a bundled
+            /// level's is an asset inside the build. Destroying the second kind unloads the asset
+            /// itself, and the level showed its picture once and never again.
+            /// </summary>
+            public bool OwnsThumbnail;
         }
 
         readonly List<Entry> _entries = new();
@@ -63,7 +72,7 @@ namespace BlockMarbleRun.Build
         void Release()
         {
             foreach (Entry entry in _entries)
-                if (entry.Thumbnail != null)
+                if (entry.OwnsThumbnail && entry.Thumbnail != null)
                     Destroy(entry.Thumbnail);
 
             _entries.Clear();
@@ -114,7 +123,7 @@ namespace BlockMarbleRun.Build
                         }
                     }
 
-                    _entries.Add(new Entry { Slot = slot, Thumbnail = texture });
+                    _entries.Add(new Entry { Slot = slot, Thumbnail = texture, OwnsThumbnail = true });
                 }
 
                 _status = _entries.Count == 0 ? "No saved creations yet - press S to save this one" : "";
@@ -249,9 +258,14 @@ namespace BlockMarbleRun.Build
 
             // The whole picture is the button: a save is chosen by recognising it, so the thing being
             // recognised should be the thing you click.
+            // The autosave has no picture and never will: it is written as you build, and stopping to
+            // photograph the world on every edit is a cost paid constantly for something nobody
+            // browses by sight. Named instead, which is also what the player is looking for.
+            bool autosave = entry.Slot.name == BuildController.AutosaveSlot;
+
             var content = entry.Thumbnail != null
                 ? new GUIContent(entry.Thumbnail)
-                : new GUIContent("no picture");
+                : new GUIContent(autosave ? "autosave" : "no picture");
 
             if (GUILayout.Button(content, GUILayout.Width(CardWidth), GUILayout.Height(ThumbHeight)))
             {
