@@ -82,6 +82,7 @@ marble inside PhysX's usable range. Idempotent.
 Assets/Art/Meshes/          26 source .stl parts — the source of truth
 Assets/Parts/Definitions/   37 PartDefinitions, mostly machine-derived
 Assets/Parts/Marbles/       ball types — size and density, mass derived from them
+Assets/Resources/Levels/    creations that ship with the build, one .json + .png each
 Assets/Scripts/             runtime code (BlockMarbleRun.Runtime)
 Assets/Editor/Import/       STL/OBJ import, part analysis, mirror and plate generation
 Assets/Editor/Tests/        self-tests and headless probes
@@ -130,7 +131,10 @@ cannot live in the save store. Bundled levels are compiled in instead:
    saves live in IndexedDB and have no file to pick
 2. **Block Marble Run → Bundle a Saved Creation** — pick the save; it is copied into
    `Assets/Resources/Levels/` with its thumbnail
-3. It appears in the save browser (`L`) for everyone, marked "comes with the game"
+3. **Block Marble Run → Bake Level Thumbnails** — renders a picture for every bundled level that
+   has none. A creation saved in the game brings its own; one bundled from a file does not, and the
+   browser is a grid of pictures
+4. It appears in the save browser (`L`) for everyone, marked "comes with the game"
 
 They are read-only, not by protection but by nature: there is nowhere in a build to write back to.
 Opening one and saving puts a copy in the player's own store, which is what you want from an example.

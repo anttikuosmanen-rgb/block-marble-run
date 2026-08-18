@@ -34,7 +34,18 @@ namespace BlockMarbleRun.Parts
 
         public PartCatalog Catalog => catalog;
 
-        void Awake()
+        void Awake() => Initialise();
+
+        /// <summary>
+        /// Everything the factory needs before it can make a part: the palette materials, the pillar
+        /// cutter, the plate the scaffolder finishes a column with.
+        ///
+        /// Public because Awake does not run for a component an editor tool adds, and a tool that
+        /// builds a creation without this gets white bricks and no pillars at all - the pillar
+        /// factory is what rebuilds a support named in a save. Baking level thumbnails is the case
+        /// that found it.
+        /// </summary>
+        public void Initialise()
         {
             BuildPaletteMaterials();
             BuildPillarFactory();
