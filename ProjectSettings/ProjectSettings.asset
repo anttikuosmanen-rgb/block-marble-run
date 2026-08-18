@@ -598,7 +598,7 @@ PlayerSettings:
   platformArchitecture:
     Standalone: 2
   scriptingBackend:
-    Standalone: 0
+    Standalone: 1
     WebGL: 1
   il2cppCompilerConfiguration: {}
   il2cppCodeGeneration: {}
