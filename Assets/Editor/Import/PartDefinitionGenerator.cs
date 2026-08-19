@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using BlockMarbleRun.Parts;
@@ -20,6 +21,9 @@ namespace BlockMarbleRun.EditorTools.Import
         const string MeshFolder = "Assets/Art/Meshes";
         const string GeneratedFolder = "Assets/Art/Meshes/Generated";
         const string DefinitionFolder = "Assets/Parts/Definitions";
+
+        /// <summary>The catalog the palette draws from and a save resolves its part ids against.</summary>
+        const string CatalogPath = "Assets/Parts/PartCatalog.asset";
 
         /// <summary>
         /// Re-derives every mirror verdict from scratch, discarding stored ones, and removes mirror
@@ -92,11 +96,14 @@ namespace BlockMarbleRun.EditorTools.Import
                 }
             }
 
+            int listed = AddToCatalog(log);
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
             Debug.Log($"[Parts] {created} created, {updated} refreshed, {mirrors} mirrors and " +
-                      $"{plates} plates generated, {needsReview} awaiting review.\n{log}");
+                      $"{plates} plates generated, {listed} added to the catalog, " +
+                      $"{needsReview} awaiting review.\n{log}");
         }
 
         /// <summary>
@@ -125,6 +132,60 @@ namespace BlockMarbleRun.EditorTools.Import
             importer.readable = wanted;
             EditorUtility.SetDirty(importer);
             importer.SaveAndReimport();
+        }
+
+        /// <summary>
+        /// Puts any definition the catalog does not list into it, so a new part reaches the palette.
+        ///
+        /// The catalog is what the palette draws and what a save resolves ids against, and it was
+        /// hand-maintained: dropping an STL in the folder produced a definition, an icon and a mirror,
+        /// and then nothing appeared in the game. That is the drop-in property this pipeline is built
+        /// around (DESIGN.md 14) quietly failing at the last step, and failing silently, since a part
+        /// that is merely absent from a list looks exactly like a part nobody added yet.
+        ///
+        /// Appended in name order rather than sorted into place: the palette's order is a decision
+        /// someone made, and re-sorting it on every import would rearrange the bar under the player's
+        /// hands each time a part arrived.
+        /// </summary>
+        static int AddToCatalog(System.Text.StringBuilder log)
+        {
+            var catalog = AssetDatabase.LoadAssetAtPath<PartCatalog>(CatalogPath);
+
+            if (catalog == null)
+            {
+                log.AppendLine($"  No catalog at {CatalogPath}; new parts will not appear in the palette.");
+                return 0;
+            }
+
+            var known = new HashSet<string>();
+
+            foreach (PartDefinition def in catalog.parts)
+                if (def != null)
+                    known.Add(def.id);
+
+            var missing = new List<PartDefinition>();
+
+            foreach (string guid in AssetDatabase.FindAssets("t:PartDefinition", new[] { DefinitionFolder }))
+            {
+                var def = AssetDatabase.LoadAssetAtPath<PartDefinition>(AssetDatabase.GUIDToAssetPath(guid));
+
+                if (def != null && !string.IsNullOrEmpty(def.id) && !known.Contains(def.id))
+                    missing.Add(def);
+            }
+
+            if (missing.Count == 0)
+                return 0;
+
+            missing.Sort((a, b) => string.CompareOrdinal(a.id, b.id));
+
+            catalog.parts.AddRange(missing);
+
+            EditorUtility.SetDirty(catalog);
+
+            foreach (PartDefinition def in missing)
+                log.AppendLine($"  Added {def.id} to the catalog.");
+
+            return missing.Count;
         }
 
         static PartDefinition LoadOrCreate(string name, ref int created, ref int updated)

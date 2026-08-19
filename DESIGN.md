@@ -342,6 +342,19 @@ a **24.5 mm** ball. The funnels' throats are **28 mm** and round. So the test is
 the shaft against the ball's diameter, with an aspect check so a long slot cannot creep in on width
 alone. Measuring "is there material above it" separates neither: there is none in either case.
 
+### 3.5.1a Ports are read off an exact height map too
+
+The mouth scan used the bounding-box-filled height map while the stud and socket masks used the exact
+one, and it cost the same kind of error §3.5 records. A box fill takes the highest triangle whose box
+merely *touches* a sample, so at an edge it reads the wall beside a channel rather than the channel
+floor. A Hubelino ramp curve, whose channel descends steeply right to its low mouth, read **8.8 mm**
+there where the surface is at **6.7** - missing the 6.4 family by more than the tolerance, so the
+piece derived one mouth instead of two and could be joined only at its high end.
+
+Reading the same map the masks use fixes it and changes nothing else: every other part in the set
+derives exactly the mouths it did before. Covering too much is safe for "is anything near here" and
+wrong for "how high is it here".
+
 ### 3.5.2 A channel measured from a shelf, not from the base
 
 Every part in the set carries its channel floor 6.4 mm above its own base - except the funnels, which

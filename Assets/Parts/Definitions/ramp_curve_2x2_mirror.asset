@@ -1,0 +1,117 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da6a0d617f2b5439583cb3af12660b6f, type: 3}
+  m_Name: ramp_curve_2x2_mirror
+  m_EditorClassIdentifier: BlockMarbleRun.Runtime::BlockMarbleRun.Parts.PartDefinition
+  id: ramp_curve_2x2_mirror
+  displayName: Ramp Curve 2X2 (mirrored)
+  category: 2
+  mesh: {fileID: 4300000, guid: ab85c6c68a86946db91848d4c4203123, type: 2}
+  colliderPrefab: {fileID: 0}
+  icon: {fileID: 2800000, guid: 1e91fec2024cb4c648ffae3dc1055a9f, type: 3}
+  selectable: 1
+  soft: 0
+  softBodyLayers: 2
+  defaultColorIndex: -1
+  verticalOffsetUnits: 0
+  footprintSize: {x: 2, y: 2}
+  footprintMask: 01010101
+  layerMasks: 01010101010101010101010101010000
+  heightLayers: 4
+  pivotOffsetUnits: {x: 0.159, y: 0.159}
+  hasTunnel: 0
+  dropHoleOffsetUnits: {x: -0, y: 0}
+  dropHoleRadiusUnits: 0
+  channelLipUnits: 0
+  topStuds: 00000000
+  bottomSockets: 01010101
+  rotation: 0
+  ports:
+  - midlineHalfStuds: {x: 0, y: 2}
+    facing: 3
+    heightMm: 6.4
+    widthStuds: 2
+    profileMm:
+    - 6.4
+    - 20.311502
+    - 20.34964
+    - 20.386774
+    - 16.337133
+    - 14.152866
+    - 12.696518
+    - 11.597975
+    - 10.730792
+    - 10.047955
+    - 9.503058
+    - 9.071731
+    - 8.746168
+    - 8.53664
+    - 8.417242
+    - 8.385931
+    - 8.442248
+    - 8.579109
+    - 8.823306
+    - 9.161094
+    - 9.610532
+    - 10.171001
+    - 10.875784
+    - 11.738098
+    - 12.766817
+    - 14.032584
+    - 15.569835
+    - 17.512817
+    - 19.960886
+    - 23.16559
+    - 27.488104
+    - 38.417984
+    - 38.11457
+  - midlineHalfStuds: {x: 2, y: 0}
+    facing: 2
+    heightMm: 25.6
+    widthStuds: 2
+    profileMm:
+    - 6.4
+    - 20.76524
+    - 22.259966
+    - 23.16559
+    - 23.600857
+    - 23.73087
+    - 23.703957
+    - 23.594467
+    - 23.456356
+    - 23.30859
+    - 23.191923
+    - 23.07942
+    - 23.01022
+    - 22.988657
+    - 23.016079
+    - 23.093433
+    - 23.224861
+    - 23.415327
+    - 23.668434
+    - 23.987669
+    - 24.367018
+    - 24.825438
+    - 25.397057
+    - 26.06399
+    - 26.84273
+    - 27.802462
+    - 28.957
+    - 30.43605
+    - 32.54001
+    - 37.136604
+    - 37.1923
+    - 37.23145
+    - 6.4
+  centerline: []
+  mirrorOf: ramp_curve_2x2
+  mirrorVerdict: 2

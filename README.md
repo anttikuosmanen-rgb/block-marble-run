@@ -99,7 +99,8 @@ smoothly. Then:
 1. **Block Marble Run → Report Parts** — footprint, layers, studs and mirror verdict for every part.
    Read it before generating anything.
 2. **Block Marble Run → Generate Part Definitions** — creates or refreshes a `PartDefinition` per
-   part, generates mirror meshes for chiral parts and plate variants for blocks.
+   part, generates mirror meshes for chiral parts and plate variants for blocks, and adds anything
+   new to `PartCatalog.asset` so it reaches the palette.
 3. **Block Marble Run → Write Part Mask Report** — rewrites `PartMasks.txt`. **Look at it.** Studs and
    anti-studs are derived from the geometry, and reading thirty-seven small ASCII diagrams has caught
    errors that no amount of looking at the 3-D view did.

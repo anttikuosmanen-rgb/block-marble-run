@@ -554,7 +554,13 @@ namespace BlockMarbleRun.EditorTools.Import
             if (w <= 4 || h <= 4)
                 return;
 
-            float[] height = BuildHeightMap(facets, w, h);
+            // Rasterised exactly, not by bounding box. The box fill takes the highest triangle whose
+            // box merely touches a sample, which at an edge means the wall beside the channel rather
+            // than the channel floor: a ramp curve's low mouth read 8.8 mm where the surface is
+            // actually at 6.7, missed the 6.4 family by more than the tolerance, and the piece came
+            // out with one mouth instead of two. Same lesson as the stud and socket masks - covering
+            // too much is safe for "is anything near here" and wrong for "how high is it here".
+            float[] height = BuildExactHeightMap(facets, w, h);
 
             // Read one sample in from the boundary; the outermost column catches wall skin and
             // rasterisation noise rather than the surface behind it.

@@ -192,7 +192,7 @@ curve_4x4
 
 ============================================================
 funnel_10x10
-  10 x 10 studs, 3 grid layers (1.5 bricks), has a way through it
+  10 x 10 studs, 3 grid layers (1.5 bricks), has a way through it, 1 channel mouth(s)
 
     - - . . o o . . B B 
     - . . . o o . . o o 
@@ -209,7 +209,7 @@ funnel_10x10
 
 ============================================================
 funnel_10x10_mirror
-  10 x 10 studs, 3 grid layers (1.5 bricks), has a way through it
+  10 x 10 studs, 3 grid layers (1.5 bricks), has a way through it, 1 channel mouth(s)
 
     B B . . o o . . - - 
     o o . . o o . . . - 
@@ -226,7 +226,7 @@ funnel_10x10_mirror
 
 ============================================================
 funnel_6x7
-  6 x 7 studs, 3 grid layers (1.5 bricks), has a way through it
+  6 x 7 studs, 3 grid layers (1.5 bricks), has a way through it, 1 channel mouth(s)
 
     - - - - B B 
     . . o o o o 
@@ -240,7 +240,7 @@ funnel_6x7
 
 ============================================================
 funnel_6x7_mirror
-  6 x 7 studs, 3 grid layers (1.5 bricks), has a way through it
+  6 x 7 studs, 3 grid layers (1.5 bricks), has a way through it, 1 channel mouth(s)
 
     B B - - - - 
     o o o o . . 
@@ -254,7 +254,7 @@ funnel_6x7_mirror
 
 ============================================================
 funnel_8x9
-  8 x 9 studs, 3 grid layers (1.5 bricks), has a way through it
+  8 x 9 studs, 3 grid layers (1.5 bricks), has a way through it, 1 channel mouth(s)
 
     - - - - - - B B 
     - . . o o . o o 
@@ -270,7 +270,7 @@ funnel_8x9
 
 ============================================================
 funnel_8x9_mirror
-  8 x 9 studs, 3 grid layers (1.5 bricks), has a way through it
+  8 x 9 studs, 3 grid layers (1.5 bricks), has a way through it, 1 channel mouth(s)
 
     B B - - - - - - 
     o o . o o . . - 
@@ -301,6 +301,24 @@ pillar_2x2x7
     B B 
 
     4 stud cell(s), 4 antistud cell(s)
+
+============================================================
+ramp_curve_2x2
+  2 x 2 studs, 4 grid layers (2 bricks), 2 channel mouth(s)
+
+    o o 
+    o o 
+
+    0 stud cell(s), 4 antistud cell(s)
+
+============================================================
+ramp_curve_2x2_mirror
+  2 x 2 studs, 4 grid layers (2 bricks), 2 channel mouth(s)
+
+    o o 
+    o o 
+
+    0 stud cell(s), 4 antistud cell(s)
 
 ============================================================
 slide_2x2
