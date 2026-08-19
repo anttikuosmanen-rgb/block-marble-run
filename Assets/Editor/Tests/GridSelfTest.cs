@@ -64,6 +64,7 @@ namespace BlockMarbleRun.EditorTools.Tests
             TestMirrorsKeepTheirDropHole();
             TestOnlyFunnelsAskForALift();
             TestTheFeedRisesToMeetAFunnel();
+            TestNoPillarWhenSupportsAreOff();
             TestABowlIsNotMistakenForStuds();
             TestALiftedPillarIsRecutRatherThanStackedOn();
             TestALiftedScaffoldBrickBecomesAPillar();
@@ -960,6 +961,41 @@ namespace BlockMarbleRun.EditorTools.Tests
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// With supports switched off, a piece placed in mid-air stays there alone.
+        ///
+        /// The switch works by withholding the pillar rather than by a flag each command consults:
+        /// every one of them already treats a missing pillar as nothing to build with, so there is no
+        /// second path through the placement, paste and lift code to keep in step - and no way for
+        /// one of the three to go on quietly scaffolding.
+        /// </summary>
+        static void TestNoPillarWhenSupportsAreOff()
+        {
+            PartDefinition track = FindPart("track_2x2");
+            PartDefinition pillar = FindPart("pillar_2x2x7");
+
+            if (track == null || pillar == null)
+            {
+                Check("track and pillar are in the catalog", false);
+                return;
+            }
+
+            // Well clear of the ground, where a piece that props itself up certainly would.
+            var floating = new PlacedPart(track, new GridCoord(0, 0, 6), 0, 0);
+
+            var carried = new GridMap();
+            List<PlacedPart> supports = ScaffoldBuilder.BuildSupports(carried, floating, pillar);
+
+            Check("a floating channel is carried when there is a pillar", supports.Count > 0,
+                  $"{supports.Count} support(s)");
+
+            var alone = new GridMap();
+            List<PlacedPart> none = ScaffoldBuilder.BuildSupports(alone, floating, null);
+
+            Check("and carried by nothing when the pillar is withheld", none.Count == 0,
+                  $"{none.Count} support(s)");
         }
 
         static void Check(string what, bool condition, string detail = null)

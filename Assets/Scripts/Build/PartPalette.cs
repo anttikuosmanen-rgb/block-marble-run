@@ -188,7 +188,35 @@ namespace BlockMarbleRun.Build
             x += 8f;
             x = DrawSwatches(x, 3f, height);
 
-            GUI.Label(new Rect(x + 10f, 5f, 520f, toolbar), HintFor(tool), _labelStyle);
+            x += 10f;
+            x = DrawSupportsToggle(x, 3f, height);
+
+            GUI.Label(new Rect(x + 10f, 5f, 460f, toolbar), HintFor(tool), _labelStyle);
+        }
+
+        /// <summary>
+        /// Whether the game props up what is placed in mid-air (DESIGN.md §5.1).
+        ///
+        /// On the bar rather than behind a key, because it changes what a click does: with it off a
+        /// piece hangs where it is put, and a player who has not been told would read that as the
+        /// scaffolding being broken.
+        /// </summary>
+        float DrawSupportsToggle(float x, float y, float height)
+        {
+            const float width = 122f;
+            var rect = new Rect(x, y, width, height);
+
+            bool wanted = GUI.Toggle(rect, controller.BuildSupports, " build supports");
+
+            if (wanted != controller.BuildSupports)
+            {
+                controller.BuildSupports = wanted;
+
+                // The bar has spent this click; the world must not also act on it.
+                Used();
+            }
+
+            return x + width;
         }
 
         float ToolButton(float x, float y, float height, string label, BuildController.Tool tool,

@@ -1036,11 +1036,27 @@ namespace BlockMarbleRun.Build
         /// <summary>Saves available to the browser.</summary>
         public SaveService Service => _saves;
 
+        /// <summary>
+        /// Whether a piece placed in mid-air gets a support built under it (DESIGN.md §5.1).
+        ///
+        /// On by default, because building freely in the air and letting the game work out how to
+        /// hold it up is the point. Off for the player who is building the structure themselves and
+        /// does not want a pillar arriving under every run they lay.
+        /// </summary>
+        public bool BuildSupports = true;
+
         /// <summary>The brick auto-scaffolding is built from (DESIGN.md §5.1).</summary>
         PartDefinition PillarDefinition
         {
             get
             {
+                // No pillar, no supports: every command that builds them already treats a missing
+                // pillar as nothing to build with, so switching them off needs no second path
+                // through the placement, paste and lift code - and cannot leave one of the three
+                // still quietly scaffolding.
+                if (!BuildSupports)
+                    return null;
+
                 if (_pillar != null)
                     return _pillar;
 

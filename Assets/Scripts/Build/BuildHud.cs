@@ -186,7 +186,8 @@ namespace BlockMarbleRun.Build
                                 $"({controller.LevelCount} here)    R still turns / cycles joins", _style);
 
             }
-            GUILayout.Label("Left click place    Shift precise    V grab (click picks, drag selects)    Del remove", _style);
+            GUILayout.Label("Left click place    Shift precise    V grab (click picks, drag selects)    Del remove" +
+                            (controller.BuildSupports ? "" : "    (supports off - pieces hang where you put them)"), _style);
             GUILayout.Label("Right click picks a piece back up    Shift right click moves it    (right drag still orbits)",
                             _style);
 

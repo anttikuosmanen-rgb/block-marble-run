@@ -29,7 +29,8 @@ to studs or to channel mouths — a channel joining another channel holds a run 
 holds an anti-stud.
 
 Nothing has to be supported. Build a curve in mid-air and the game puts a pillar under it, cut to the
-right height, undoable in the same step as the piece itself.
+right height, undoable in the same step as the piece itself. Untick **build supports** on the bar to
+turn that off — pieces then hang exactly where you put them, for building the structure yourself.
 
 | | |
 |---|---|

@@ -611,6 +611,13 @@ Floating parts are not an error state — they are a *normal build style*. Requi
 
 **Real bricks, at placement time.** The original plan deferred scaffolding to the switch into play mode. That reads badly while building — a piece hangs in mid-air with nothing under it and the player has to take on trust that something will appear later. Building the support immediately makes the structure truthful at every moment, and the bricks can be edited or deleted like anything else. Part and pillars are one history entry, so a single undo removes both.
 
+**It can be switched off.** A checkbox on the bar, on by default: building freely in the air and
+letting the game work out how to hold it up is the point, but a player building the structure
+themselves does not want a pillar arriving under every run they lay. Implemented by withholding the
+pillar rather than by a flag each command consults - every command already treats a missing pillar as
+nothing to build with, so there is no second path through the placement, paste and lift code to keep
+in step, and no way for one of the three to go on quietly scaffolding.
+
 **Only channel parts prop themselves up.** A brick is the player's own structure and may cantilever as far as they like; a run of track is meant to look carried.
 
 **Pillars stand under the mouths**, not under the footprint's corners. Most of a 4×4 curve's square is empty arc that needs nothing; the ends are what a channel actually rests on.
